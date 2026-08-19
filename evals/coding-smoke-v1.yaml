@@ -1,0 +1,18 @@
+id: coding-smoke-v1
+dataset: aider/aider-polyglot@pending-phase-2
+tasks:
+  - pending-cpp
+  - pending-go
+  - pending-java
+  - pending-javascript
+  - pending-python
+  - pending-rust
+attempts: 1
+timeoutMinutes: 20
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: deepseek-responses-flash
+  - id: aider
+    agent: aider
+    model: pending-phase-2

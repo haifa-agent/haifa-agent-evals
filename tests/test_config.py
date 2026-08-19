@@ -1,0 +1,64 @@
+from pathlib import Path
+
+import pytest
+
+from haifa_agent_evals.config import load_config
+
+
+def _write(tmp_path: Path, text: str) -> Path:
+    path = tmp_path / "eval.yaml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+BASE = """\
+id: smoke
+dataset: org/data@v1
+tasks: [task-a, task-b]
+attempts: 1
+timeoutMinutes: 20
+candidates:
+  - id: first
+    agent: aider
+    model: provider/model
+"""
+
+
+def test_loads_minimal_config(tmp_path: Path) -> None:
+    config = load_config(_write(tmp_path, BASE))
+    assert config.id == "smoke"
+    assert config.tasks == ("task-a", "task-b")
+
+
+@pytest.mark.parametrize("dataset", ["org/data", "org/data@latest", "org/data@main"])
+def test_rejects_unpinned_dataset(tmp_path: Path, dataset: str) -> None:
+    with pytest.raises(ValueError, match="dataset"):
+        load_config(_write(tmp_path, BASE.replace("org/data@v1", dataset)))
+
+
+def test_rejects_unknown_field(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="unknown evaluation fields"):
+        load_config(_write(tmp_path, BASE + "futureOption: true\n"))
+
+
+def test_rejects_duplicate_tasks(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="task ids must be unique"):
+        load_config(_write(tmp_path, BASE.replace("task-a, task-b", "task-a, task-a")))
+
+
+def test_rejects_duplicate_candidates(tmp_path: Path) -> None:
+    duplicate = (
+        BASE
+        + """\
+  - id: first
+    agent: oracle
+    model: provider/model
+"""
+    )
+    with pytest.raises(ValueError, match="candidate ids must be unique"):
+        load_config(_write(tmp_path, duplicate))
+
+
+def test_rejects_eval_id_that_can_escape_work_directory(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="must contain only"):
+        load_config(_write(tmp_path, BASE.replace("id: smoke", "id: ../outside")))

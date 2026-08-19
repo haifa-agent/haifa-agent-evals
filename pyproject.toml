@@ -1,0 +1,34 @@
+[project]
+name = "haifa-agent-evals"
+version = "0.1.0"
+description = "Minimal Harbor-based coding agent comparisons"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "harbor==0.20.0",
+  "pyyaml==6.0.3",
+]
+
+[project.scripts]
+evals = "haifa_agent_evals.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest==8.4.2",
+  "ruff==0.12.12",
+]
+
+[build-system]
+requires = ["uv-build>=0.8.4,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
