@@ -59,6 +59,11 @@ def test_rejects_duplicate_candidates(tmp_path: Path) -> None:
         load_config(_write(tmp_path, duplicate))
 
 
+def test_rejects_multiple_attempts_in_mvp(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="exactly one attempt"):
+        load_config(_write(tmp_path, BASE.replace("attempts: 1", "attempts: 2")))
+
+
 def test_rejects_eval_id_that_can_escape_work_directory(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="must contain only"):
         load_config(_write(tmp_path, BASE.replace("id: smoke", "id: ../outside")))

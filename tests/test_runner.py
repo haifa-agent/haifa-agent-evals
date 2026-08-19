@@ -1,10 +1,11 @@
+import json
 from pathlib import Path
 
-from haifa_agent_evals.config import Candidate, EvaluationConfig
-from haifa_agent_evals.runner import build_commands, run
+from haifa_agent_evals.config import Candidate, EvaluationConfig, load_config
+from haifa_agent_evals.runner import _default_haifa_jar, build_commands, build_job_config, run
 
 
-def test_builds_one_harbor_command_per_candidate(tmp_path: Path) -> None:
+def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:
     config = EvaluationConfig(
         id="smoke",
         dataset="org/data@v1",
@@ -17,10 +18,58 @@ def test_builds_one_harbor_command_per_candidate(tmp_path: Path) -> None:
         ),
     )
     commands = build_commands(config, tmp_path)
-    assert len(commands) == 2
-    assert commands[0][:4] == ["harbor", "run", "--dataset", "org/data@v1"]
-    assert commands[0].count("--include-task-name") == 2
+    assert len(commands) == 1
+    assert commands[0][:3] == ["harbor", "run", "--config"]
+
+    job_config = build_job_config(config, tmp_path)
+    assert job_config["n_concurrent_trials"] == 1
+    assert len(job_config["agents"]) == 2
+    assert job_config["datasets"][0]["ref"] == "v1"
 
     plan = run(config, tmp_path, plan_only=True)
     assert plan.is_file()
+    assert (tmp_path.parent / "smoke-harbor-job.yaml").is_file()
     assert not any(path.name == "result.json" for path in tmp_path.rglob("result.json"))
+
+
+def test_uses_complete_local_task_cache(tmp_path: Path, monkeypatch) -> None:
+    tasks = tmp_path / "selected-tasks"
+    (tasks / "task-a").mkdir(parents=True)
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@sha256:exact",
+        tasks=("org/task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("aider", "aider", "provider/model"),),
+    )
+    monkeypatch.setenv("HAIFA_EVAL_TASKS_PATH", str(tasks))
+
+    plan = run(config, tmp_path / "job", plan_only=True)
+
+    plan_data = json.loads(plan.read_text(encoding="utf-8"))
+    assert plan_data["datasetSource"] == str(tasks.resolve())
+    job_config = (tmp_path / "smoke-harbor-job.yaml").read_text(encoding="utf-8")
+    assert "path:" in job_config
+    assert "name: org/data" not in job_config
+
+
+def test_default_jar_is_in_sibling_haifa_agent_repository() -> None:
+    path = _default_haifa_jar()
+    assert path.parts[-5:] == (
+        "haifa-agent",
+        "haifa-agent-applications",
+        "haifa-agent-cli",
+        "target",
+        "haifa-agent-cli-0.1.0-SNAPSHOT.jar",
+    )
+
+
+def test_checked_in_aider_route_survives_harbor_provider_split(tmp_path: Path) -> None:
+    repository = Path(__file__).resolve().parents[1]
+    config = load_config(repository / "evals" / "coding-smoke-v1.yaml")
+
+    job_config = build_job_config(config, tmp_path)
+
+    aider = next(agent for agent in job_config["agents"] if agent.get("name") == "aider")
+    assert aider["model_name"] == "openai/openai/deepseek-v4-flash"

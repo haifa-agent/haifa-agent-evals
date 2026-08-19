@@ -49,7 +49,7 @@ MVP 不计算置信区间、Bootstrap、pass@k 或综合能力分。
 ## 5. 资源
 
 - Candidate timeout：20 分钟；
-- Harbor 外层 timeout：21 分钟；
+- Harbor Agent timeout：20 分钟；
 - Verifier timeout：10 分钟；
 - 本地并发：1，链路稳定后最多 2；
 - Haifa 使用当前配置的 50 Iterations、32 Tool Calls；

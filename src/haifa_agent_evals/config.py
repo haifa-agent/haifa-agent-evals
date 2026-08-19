@@ -98,8 +98,8 @@ def load_config(path: Path) -> EvaluationConfig:
 
     attempts = raw["attempts"]
     timeout = raw["timeoutMinutes"]
-    if not isinstance(attempts, int) or isinstance(attempts, bool) or attempts < 1:
-        raise ValueError("attempts must be a positive integer")
+    if attempts != 1 or isinstance(attempts, bool):
+        raise ValueError("MVP supports exactly one attempt per candidate/task")
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout < 1:
         raise ValueError("timeoutMinutes must be a positive integer")
 

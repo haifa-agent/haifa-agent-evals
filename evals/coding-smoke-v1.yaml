@@ -1,12 +1,12 @@
 id: coding-smoke-v1
-dataset: aider/aider-polyglot@pending-phase-2
+dataset: aider/aider-polyglot@sha256:01e28d85e46beae5b7e29a29f57cb49d882b5486583d52cec4ee5bf3540a1c84
 tasks:
-  - pending-cpp
-  - pending-go
-  - pending-java
-  - pending-javascript
-  - pending-python
-  - pending-rust
+  - aider/polyglot_cpp_gigasecond
+  - aider/polyglot_go_wordy
+  - aider/polyglot_java_circular-buffer
+  - aider/polyglot_javascript_grade-school
+  - aider/polyglot_python_hangman
+  - aider/polyglot_rust_xorcism
 attempts: 1
 timeoutMinutes: 20
 candidates:
@@ -15,4 +15,4 @@ candidates:
     model: deepseek-responses-flash
   - id: aider
     agent: aider
-    model: pending-phase-2
+    model: openai/openai/deepseek-v4-flash

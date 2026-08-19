@@ -34,7 +34,8 @@ integrations.harbor.haifa_agent:HaifaCodingAgent
 ## 3. 安装
 
 - Container 必须是 Linux；
-- 使用冻结的 Java 21 Environment Image；
+- Container 已有 Java 21 时直接复用；否则使用冻结的 Temurin 21.0.8+9 JRE archive；
+- JRE archive 可由宿主缓存上传，未提供缓存时才从 Adoptium 下载，并校验固定 SHA-256；
 - JAR 放在 `/opt/haifa/haifa-agent.jar`；
 - 配置放在 `/opt/haifa/haifa-eval.yaml`；
 - JAR 和配置对 Agent 用户只读；
@@ -80,14 +81,13 @@ java -jar /opt/haifa/haifa-agent.jar
 
 ## 6. 输出
 
-Adapter 收集：
+Adapter 只写入：
 
 - CLI exit code；
-- bounded stdout/stderr；
-- `/logs/agent/haifa-trace.jsonl`；
-- started/finished/duration；
 - JAR/config digest；
-- timeout 与安全错误类型。
+- `/logs/agent/haifa-trace.jsonl`。
+
+stdout/stderr、started/finished/duration、timeout 和 Artifact 生命周期由 Harbor 记录，Adapter 不复制。
 
 最终 Workspace 由 Harbor Verifier 读取。Adapter 不生成 `run-result.json`、`trial-result.json`，也不解析
 自然语言回答。
@@ -105,11 +105,10 @@ Adapter 必须区分 Candidate 错误与自身错误，不能把所有非零退�
 
 ## 8. Timeout 与清理
 
-- CLI timeout 20 分钟；Harbor timeout 21 分钟；
-- 外层 timeout 先正常终止，给 Java Shutdown Hook 3 秒；
-- 仍未退出则强制收敛进程树；
-- 有残留进程时结果为 ERROR；
-- 用 Fake 进程测试清理，不等待真实模型超时。
+- CLI 与 Harbor Agent timeout 都固定为 20 分钟，Verifier timeout 为 10 分钟；
+- Adapter 把 timeout 交给 Harbor Environment，不实现第二套进程管理器；
+- Harbor 删除每个 Trial 的独立 Container，从 Container 边界收敛 Java、Shell 和 Tool 子进程；
+- Container 无法删除或 Verifier 无法运行时记 ERROR。
 
 ## 9. 最小 Contract Tests
 
@@ -118,9 +117,8 @@ Adapter 必须区分 Candidate 错误与自身错误，不能把所有非零退�
 3. Workspace 显式且不越界；
 4. Credential 不出现在 argv、日志和 Trace；
 5. exit 0/1/2 都按规则保留 Verifier；
-6. Trace 是合法 JSONL；
-7. timeout 后进程收敛；
-8. Adapter 不创建自有结果模型。
+6. Adapter 不创建自有结果模型；
+7. 真实 Trial 中检查 Trace JSONL 与 Container 清理。
 
 ## 10. MVP 不支持
 

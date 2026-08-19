@@ -16,11 +16,13 @@
 
 ## 2. Dataset 与 Tasks
 
-- Dataset：`aider/aider-polyglot`；
-- 开发时固定当前已发布的精确版本和包摘要，禁止 `latest/main/head`；
+- Dataset：`aider/aider-polyglot@sha256:01e28d85e46beae5b7e29a29f57cb49d882b5486583d52cec4ee5bf3540a1c84`；
+- Harbor 版本：`0.20.0`；
 - 从 C++、Go、Java、JavaScript、Python、Rust 各选择 1 个 Task；
 - 选择规则：按 `SHA256(datasetVersion + taskId)` 排序，每种语言取第一个能通过离线校准的 Task；
-- Task IDs 写入 `eval.yaml`，运行后不得更换。
+- Task IDs 已冻结为 `polyglot_cpp_gigasecond`、`polyglot_go_wordy`、
+  `polyglot_java_circular-buffer`、`polyglot_javascript_grade-school`、
+  `polyglot_python_hangman`、`polyglot_rust_xorcism`，运行后不得更换。
 
 离线校准只要求：
 
@@ -48,7 +50,9 @@
 
 - Agent ID：`aider`；
 - 使用 Harbor 0.20.0 内置 Aider Agent；
-- 优先使用与 Haifa 等价的 DeepSeek V4 Flash 模型和相同时限；
+- Harbor 模型路由写为 `openai/openai/deepseek-v4-flash`：第一个 `openai/` 供 Harbor 选择
+  Credential，Harbor 剥离后把 `openai/deepseek-v4-flash` 交给 Aider；API Base 为
+  `https://api.deepseek.com`，与 Haifa 使用同一 DeepSeek V4 Flash 模型和相同时限；
 - 若 Harbor/Aider 无法使用同一模型，不静默换模型：在 `eval.yaml` 固定实际模型，并把结果明确标记为
   “完整系统对比”，不归因于 Agent 架构。
 

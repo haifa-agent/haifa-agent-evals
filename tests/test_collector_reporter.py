@@ -30,10 +30,17 @@ def _trial(
     (trial / "result.json").write_text(
         json.dumps(
             {
-                "reward": reward,
-                "duration_seconds": duration,
-                "exit_code": 0,
-                "error_type": error_type,
+                "task_name": task,
+                "agent_info": {"name": candidate},
+                "verifier_result": (None if reward is None else {"rewards": {"reward": reward}}),
+                "started_at": "2026-08-19T00:00:00+00:00",
+                "finished_at": f"2026-08-19T00:00:{int(duration):02d}+00:00",
+                "agent_result": {"metadata": {"exit_code": 0}},
+                "exception_info": (
+                    None
+                    if not error_type
+                    else {"exception_type": error_type, "exception_message": "redacted"}
+                ),
             }
         ),
         encoding="utf-8",

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -84,10 +86,34 @@ def _int_or_none(value: Any) -> int | None:
     return int(value)
 
 
+def _reward(raw: dict[str, Any]) -> float | None:
+    rewards = _nested(raw, "verifier_result", "rewards")
+    if not isinstance(rewards, dict) or not rewards:
+        return None
+    if "reward" in rewards:
+        return _float_or_none(rewards["reward"])
+    if len(rewards) == 1:
+        return _float_or_none(next(iter(rewards.values())))
+    raise ValueError("trial has multiple verifier rewards but no canonical 'reward'")
+
+
+def _duration(raw: dict[str, Any]) -> float | None:
+    started = raw.get("started_at")
+    finished = raw.get("finished_at")
+    if not isinstance(started, str) or not isinstance(finished, str):
+        return None
+    return (datetime.fromisoformat(finished) - datetime.fromisoformat(started)).total_seconds()
+
+
+def _language(task_id: str) -> str:
+    match = re.search(r"polyglot_(cpp|go|java|javascript|python|rust)_", task_id)
+    return match.group(1) if match else "unknown"
+
+
 def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
     config = _read_json(trial_dir / "config.json")
     raw = _read_json(trial_dir / "result.json")
-    reward = _float_or_none(_first(raw.get("reward"), _nested(raw, "verifier_result", "reward")))
+    reward = _reward(raw)
     error_type = str(
         _first(
             raw.get("error_type"),
@@ -97,17 +123,19 @@ def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
     )
     status = "ERROR" if reward is None else ("PASS" if reward >= 1.0 else "FAIL")
     task_id = str(_first(raw.get("task_name"), _nested(config, "task", "name"), "unknown"))
-    candidate = str(_first(raw.get("candidate"), _nested(config, "agent", "name"), "unknown"))
-    duration = _float_or_none(
-        _first(raw.get("duration_seconds"), _nested(raw, "timing", "duration_seconds"))
+    candidate = str(
+        _first(
+            _nested(raw, "agent_info", "name"),
+            _nested(config, "agent", "name"),
+            "unknown",
+        )
     )
+    duration = _duration(raw)
     exit_code = _int_or_none(
-        _first(raw.get("exit_code"), _nested(raw, "agent_result", "exit_code"))
+        _first(raw.get("exit_code"), _nested(raw, "agent_result", "metadata", "exit_code"))
     )
-    language = str(
-        _first(raw.get("language"), _nested(config, "task", "metadata", "language"), "unknown")
-    )
-    attempt = int(_first(raw.get("attempt"), config.get("attempt"), 1))
+    language = _language(task_id)
+    attempt = 1
     return Result(
         eval_id=eval_id,
         candidate=candidate,
