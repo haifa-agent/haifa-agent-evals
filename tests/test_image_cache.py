@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -83,3 +84,18 @@ def test_task_prebuilt_image_is_digest_pinned() -> None:
     )
 
     assert '[environment]\ndocker_image = "localhost/task@sha256:exact"' in generated
+
+
+def test_host_tree_hash_uses_case_sensitive_posix_relative_order(tmp_path: Path) -> None:
+    (tmp_path / "CMakeLists.txt").write_bytes(b"cmake\n")
+    (tmp_path / "binary.cpp").write_bytes(b"cpp\n")
+    expected = hashlib.sha256()
+    for relative, content in (
+        (b"CMakeLists.txt", b"cmake\n"),
+        (b"binary.cpp", b"cpp\n"),
+    ):
+        expected.update(len(relative).to_bytes(4, "big"))
+        expected.update(relative)
+        expected.update(content)
+
+    assert image_cache._host_tree_hash(tmp_path) == expected.hexdigest()

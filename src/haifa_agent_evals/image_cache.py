@@ -244,8 +244,16 @@ def _agent_ready_dockerfile(
 
 def _host_tree_hash(root: Path) -> str:
     digest = hashlib.sha256()
-    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
-        relative = path.relative_to(root).as_posix().encode("utf-8")
+    files = sorted(
+        (
+            (candidate.relative_to(root).as_posix(), candidate)
+            for candidate in root.rglob("*")
+            if candidate.is_file()
+        ),
+        key=lambda item: item[0],
+    )
+    for relative_name, path in files:
+        relative = relative_name.encode("utf-8")
         digest.update(len(relative).to_bytes(4, "big"))
         digest.update(relative)
         digest.update(path.read_bytes())
@@ -257,8 +265,16 @@ import hashlib
 from pathlib import Path
 root = Path('/app')
 digest = hashlib.sha256()
-for path in sorted(candidate for candidate in root.rglob('*') if candidate.is_file()):
-    relative = path.relative_to(root).as_posix().encode('utf-8')
+files = sorted(
+    (
+        (candidate.relative_to(root).as_posix(), candidate)
+        for candidate in root.rglob('*')
+        if candidate.is_file()
+    ),
+    key=lambda item: item[0],
+)
+for relative_name, path in files:
+    relative = relative_name.encode('utf-8')
     digest.update(len(relative).to_bytes(4, 'big'))
     digest.update(relative)
     digest.update(path.read_bytes())
