@@ -87,8 +87,8 @@ def report(results_path: Path, output: Path | None = None) -> Path:
         "## Candidate summary",
         "",
         "| Candidate | Model route | Agent version | Planned | Valid | Passed | "
-        "Pass rate | Errors | Median duration |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "Pass rate | Result errors | Agent exceptions | Median duration |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for candidate in sorted(by_candidate):
         candidate_rows = by_candidate[candidate]
@@ -96,10 +96,12 @@ def report(results_path: Path, output: Path | None = None) -> Path:
         passed = sum(row["status"] == "PASS" for row in valid)
         rate = "unavailable" if not valid else f"{passed / len(valid):.1%}"
         errors = sum(row["status"] == "ERROR" for row in candidate_rows)
+        agent_exceptions = sum(bool(row["error_type"]) for row in candidate_rows)
         lines.append(
             f"| {candidate} | {_single_value(candidate_rows, 'model')} | "
             f"{_single_value(candidate_rows, 'agent_version')} | {len(candidate_rows)} | "
-            f"{len(valid)} | {passed} | {rate} | {errors} | {_duration(candidate_rows)} |"
+            f"{len(valid)} | {passed} | {rate} | {errors} | {agent_exceptions} | "
+            f"{_duration(candidate_rows)} |"
         )
 
     candidates = sorted(by_candidate)
@@ -133,6 +135,28 @@ def report(results_path: Path, output: Path | None = None) -> Path:
             lines.append(
                 f"| {row['candidate']} | {row['task_id']} | {row['status']} | "
                 f"{row['exit_code'] or '-'} | {_failure_reason(row)} |"
+            )
+    else:
+        lines.append("| - | - | - | - | - |")
+
+    agent_exceptions = [row for row in rows if row["error_type"]]
+    lines.extend(
+        [
+            "",
+            "## Agent exceptions",
+            "",
+            "Verifier reward remains the correctness source. This section separately "
+            "shows trials where the agent process still exited with an exception.",
+            "",
+            "| Candidate | Task | Verifier status | Exit code | Exception |",
+            "| --- | --- | --- | ---: | --- |",
+        ]
+    )
+    if agent_exceptions:
+        for row in agent_exceptions:
+            lines.append(
+                f"| {row['candidate']} | {row['task_id']} | {row['status']} | "
+                f"{row['exit_code'] or '-'} | {row['error_type']} |"
             )
     else:
         lines.append("| - | - | - | - | - |")
