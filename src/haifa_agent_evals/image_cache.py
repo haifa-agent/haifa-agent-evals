@@ -458,6 +458,7 @@ def _generated_evaluation_config(
         "dataset": dataset,
         "tasks": list(source.tasks),
         "attempts": source.attempts,
+        "maxRetries": source.max_retries,
         "timeoutMinutes": source.timeout_minutes,
         "candidates": [
             {"id": candidate.id, "agent": candidate.agent, "model": candidate.model}

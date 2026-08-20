@@ -62,7 +62,7 @@ def build_job_config(
         "n_attempts": config.attempts,
         "n_concurrent_trials": 1,
         "quiet": False,
-        "retry": {"max_retries": 0},
+        "retry": {"max_retries": config.max_retries},
         "environment": environment,
         "verifier": {"override_timeout_sec": 600, "max_timeout_sec": 600},
         "agents": [
@@ -194,6 +194,7 @@ def _write_inputs(config: EvaluationConfig, work_dir: Path) -> Path:
                 ),
                 "tasks": list(config.tasks),
                 "attempts": config.attempts,
+                "maxRetries": config.max_retries,
                 "commands": commands,
             },
             indent=2,

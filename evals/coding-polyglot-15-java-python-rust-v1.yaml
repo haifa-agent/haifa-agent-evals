@@ -19,6 +19,7 @@ tasks:
   - aider/polyglot_rust_variable-length-quantity
   - aider/polyglot_rust_decimal
 attempts: 1
+maxRetries: 1
 timeoutMinutes: 20
 candidates:
   - id: haifa
