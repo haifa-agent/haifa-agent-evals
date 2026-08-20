@@ -18,9 +18,10 @@ class _ExecResult:
 
 
 class _FakeEnvironment:
-    def __init__(self, run_exit_code: int = 0) -> None:
+    def __init__(self, run_exit_code: int = 0, java_available: bool = True) -> None:
         self.default_user = "agent"
         self.run_exit_code = run_exit_code
+        self.java_available = java_available
         self.commands: list[tuple[str, object, dict[str, str] | None]] = []
         self.uploads: list[tuple[Path, str]] = []
 
@@ -32,6 +33,10 @@ class _FakeEnvironment:
         **_: object,
     ) -> _ExecResult:
         self.commands.append((command, user, env))
+        if "tar -xzf /tmp/haifa-java.tar.gz" in command:
+            self.java_available = True
+        if "java --list-modules" in command or '"$JAVA" --list-modules' in command:
+            return _ExecResult(return_code=0 if self.java_available else 1)
         if "--message" in command:
             return _ExecResult(return_code=self.run_exit_code)
         return _ExecResult()
@@ -51,7 +56,7 @@ def _agent(tmp_path: Path) -> HaifaCodingAgent:
 
 def test_install_uploads_and_verifies_immutable_inputs(tmp_path: Path) -> None:
     agent = _agent(tmp_path)
-    environment = _FakeEnvironment()
+    environment = _FakeEnvironment(java_available=True)
 
     asyncio.run(agent.install(environment))  # type: ignore[arg-type]
 
@@ -87,14 +92,47 @@ def test_install_can_upload_one_pinned_java_archive(
         config_path=config,
         java_archive_path=java_archive,
     )
-    environment = _FakeEnvironment()
+    environment = _FakeEnvironment(java_available=False)
 
     asyncio.run(agent.install(environment))  # type: ignore[arg-type]
 
     assert environment.uploads[0] == (java_archive, "/tmp/haifa-java.tar.gz")
-    install_command = environment.commands[1][0]
+    install_command = next(
+        command for command, _, _ in environment.commands if "tar -xzf" in command
+    )
     assert "curl -L" not in install_command
-    assert "jdk.random" in install_command
+    assert "jdk.random" in "\n".join(command for command, _, _ in environment.commands)
+
+
+def test_install_skips_pinned_java_archive_when_image_java_is_usable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    java_archive = tmp_path / "jdk.tar.gz"
+    java_archive.write_bytes(b"pinned jdk")
+    monkeypatch.setattr(
+        haifa_agent_module,
+        "_JAVA_ARCHIVE_SHA256",
+        haifa_agent_module._sha256(java_archive),
+    )
+    jar = tmp_path / "agent.jar"
+    config = tmp_path / "config.yaml"
+    jar.write_bytes(b"fake jar")
+    config.write_text("approval: {mode: auto}\n", encoding="utf-8")
+    agent = HaifaCodingAgent(
+        logs_dir=tmp_path / "logs",
+        jar_path=jar,
+        config_path=config,
+        java_archive_path=java_archive,
+    )
+    environment = _FakeEnvironment(java_available=True)
+
+    asyncio.run(agent.install(environment))  # type: ignore[arg-type]
+
+    assert java_archive not in [source for source, _ in environment.uploads]
+    assert [target for _, target in environment.uploads] == [
+        "/opt/haifa/haifa-agent.jar",
+        "/opt/haifa/haifa-eval.yaml",
+    ]
 
 
 @pytest.mark.parametrize("exit_code", [0, 1, 2])

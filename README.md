@@ -41,8 +41,45 @@ uv sync --frozen
 uv run evals run --config evals/coding-smoke-v1.yaml
 uv run evals collect --job-dir work/coding-smoke-v1 --output reports/coding-smoke-v1/results.csv
 uv run evals report --results reports/coding-smoke-v1/results.csv
+uv run evals image seed-aider --container <stopped-aider-trial-container-id>
+uv run evals image build --java-archive /path/to/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz
+uv run evals image check
+uv run evals image prepare-tasks --config evals/coding-smoke-v1.yaml --tasks-path work/derived-tasks
 uv run pytest
 ```
+
+## Agent 基础设施镜像
+
+`infra/agent-base/Dockerfile` 定义了不含题目和凭据的本地基础设施镜像，固定包含：
+
+- `buildpack-deps:jammy` 的 OCI digest；
+- Temurin JDK `21.0.8+9` 及压缩包 SHA-256；
+- Aider `0.86.2`、Python `3.12.8` 和完整的 Python 依赖版本集合。
+
+`image seed-aider` 只从一个已验证的 Aider trial 容器复制固定 Python 运行时与
+`aider-chat` 安装目录，不复制题目、聊天历史、日志或模型输出。镜像构建会按规范化包名把实际安装元数据与仓库中的完整依赖锁逐项比较，因此来源容器不能静默带入另一套依赖。
+
+构建命令把大体积 JDK 和 Aider runtime 复制到被忽略的 `work/image-cache/` 上下文，不把它们提交到 Git，也不需要容器访问外网。构建完成后会执行无模型冒烟检查，并把实际 image ID、大小、标签和 RepoDigests 写入
+`work/image-cache/agent-infra/image-lock.json`。默认镜像名为
+`localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-v1`。
+
+Haifa adapter 会先探测镜像中的 Java 21，再决定是否上传 JDK；固定版 Aider adapter 会先核对精确版本，再决定是否联网安装。因此没有使用该镜像时仍可回退安装，使用后则不会在每个 trial 重复下载这两部分基础设施。
+
+该镜像不能直接替代某一道 Harbor 题目镜像，因为它刻意不包含 `/app` 题目 workspace。若后续把它作为题目 Dockerfile 的基础层或生成 Harbor `docker_image`，必须固定新的环境/数据集摘要；不能把结果混入当前冻结数据集。
+
+`image prepare-tasks` 完成上述转换：它先验证原始冻结数据集，并按 `/app` 文件内容匹配本机已经成功构建的 Harbor 题目镜像；随后从这些镜像复用语言工具链与 workspace，再叠加固定 Agent 基础设施，全程不重新下载语言依赖。生成镜像使用 RepoDigest 写入新的 `task.toml`，最后生成新的任务摘要、数据集摘要和 eval 配置。输出默认位于
+`work/image-cache/task-environments/coding-smoke-v1-agent-infra-v1/`。
+
+运行生成环境时显式指定两项本地证据：
+
+```powershell
+$root = "work/image-cache/task-environments/coding-smoke-v1-agent-infra-v1"
+$env:HAIFA_EVAL_TASKS_PATH = "$root/tasks"
+$env:HAIFA_EVAL_DATASET_MANIFEST_PATH = "$root/coding-smoke-v1-agent-infra-v1.dataset.toml"
+uv run evals run --config "$root/coding-smoke-v1-agent-infra-v1.yaml"
+```
+
+这样 Harbor 会使用每道题的预构建 RepoDigest，跳过 Dockerfile 构建；Haifa 与 Aider adapter 随后分别验证 Java 21 和 Aider 0.86.2 并跳过大体积安装。
 
 ## 配置与执行约束
 

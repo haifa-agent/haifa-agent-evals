@@ -83,28 +83,38 @@ class HaifaCodingAgent(BaseInstalledAgent):
             f"install -d -m 0755 {_CONTAINER_ROOT} && "
             f"install -d -m 0777 {_TRANSCRIPT_ROOT}",
         )
-        if self.java_archive_path is not None:
-            await environment.upload_file(self.java_archive_path, _JAVA_ARCHIVE_PATH)
-            obtain_java = "true"
-        else:
-            obtain_java = (
-                "apt-get update && apt-get install -y curl ca-certificates && "
-                f"curl -L --fail --retry 3 -o {_JAVA_ARCHIVE_PATH} {_JAVA_ARCHIVE_URL}"
-            )
-        await self.exec_as_root(
-            environment,
+        java_probe = await environment.exec(
             command=(
-                "if ! command -v java >/dev/null 2>&1 || "
-                "! java -version 2>&1 | grep -q '\"21' || "
-                "! java --list-modules 2>/dev/null | grep -q '^jdk.random@'; then "
-                f"{obtain_java} && "
-                f"echo '{_JAVA_ARCHIVE_SHA256}  {_JAVA_ARCHIVE_PATH}' | sha256sum -c - && "
-                f"mkdir -p {_CONTAINER_ROOT}/java && "
-                f"tar -xzf {_JAVA_ARCHIVE_PATH} -C {_CONTAINER_ROOT}/java --strip-components=1 && "
-                f"rm {_JAVA_ARCHIVE_PATH}; fi"
+                f"JAVA=$([ -x {_CONTAINER_ROOT}/java/bin/java ] && "
+                f"echo {_CONTAINER_ROOT}/java/bin/java || command -v java || true); "
+                'test -n "$JAVA" && '
+                '"$JAVA" -version 2>&1 | grep -q \'"21\' && '
+                '"$JAVA" --list-modules 2>/dev/null | grep -q \'^jdk.random@\''
             ),
-            env={"DEBIAN_FRONTEND": "noninteractive"},
+            user="root",
         )
+        if java_probe.return_code != 0:
+            if self.java_archive_path is not None:
+                await environment.upload_file(self.java_archive_path, _JAVA_ARCHIVE_PATH)
+                obtain_java = "true"
+            else:
+                obtain_java = (
+                    "apt-get update && apt-get install -y curl ca-certificates && "
+                    f"curl -L --fail --retry 3 --retry-all-errors "
+                    f"-o {_JAVA_ARCHIVE_PATH} {_JAVA_ARCHIVE_URL}"
+                )
+            await self.exec_as_root(
+                environment,
+                command=(
+                    f"{obtain_java} && "
+                    f"echo '{_JAVA_ARCHIVE_SHA256}  {_JAVA_ARCHIVE_PATH}' | sha256sum -c - && "
+                    f"mkdir -p {_CONTAINER_ROOT}/java && "
+                    f"tar -xzf {_JAVA_ARCHIVE_PATH} -C {_CONTAINER_ROOT}/java "
+                    "--strip-components=1 && "
+                    f"rm {_JAVA_ARCHIVE_PATH}"
+                ),
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+            )
         await environment.upload_file(self.jar_path, _JAR_PATH)
         await environment.upload_file(self.config_path, _CONFIG_PATH)
         await self.exec_as_root(

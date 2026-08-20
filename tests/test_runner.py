@@ -104,6 +104,21 @@ def test_rejects_missing_docker_compose_overlay(tmp_path: Path, monkeypatch) -> 
         run(config, tmp_path / "job", plan_only=True)
 
 
+def test_rejects_missing_explicit_dataset_manifest(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HAIFA_EVAL_DATASET_MANIFEST_PATH", str(tmp_path / "missing.toml"))
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@sha256:exact",
+        tasks=("org/task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("aider", "aider", "provider/model"),),
+    )
+
+    with pytest.raises(ValueError, match="DATASET_MANIFEST_PATH"):
+        run(config, tmp_path / "job", plan_only=True)
+
+
 def test_validates_local_tasks_against_pinned_manifest(tmp_path: Path) -> None:
     tasks = tmp_path / "tasks"
     task = tasks / "task-a"
@@ -164,6 +179,10 @@ def test_checked_in_aider_route_survives_harbor_provider_split(tmp_path: Path) -
 
     job_config = build_job_config(config, tmp_path)
 
-    aider = next(agent for agent in job_config["agents"] if agent.get("name") == "aider")
+    aider = next(
+        agent
+        for agent in job_config["agents"]
+        if agent.get("import_path", "").endswith(":PinnedAiderAgent")
+    )
     assert aider["model_name"] == "openai/openai/deepseek-v4-flash"
     assert aider["env"]["AIDER_DISABLE_PLAYWRIGHT"] == "true"

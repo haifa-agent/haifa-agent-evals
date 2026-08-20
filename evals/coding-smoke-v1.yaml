@@ -14,5 +14,5 @@ candidates:
     agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
     model: deepseek-responses-flash
   - id: aider
-    agent: aider
+    agent: haifa_agent_evals.integrations.harbor.pinned_aider:PinnedAiderAgent
     model: openai/openai/deepseek-v4-flash

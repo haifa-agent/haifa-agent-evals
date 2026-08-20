@@ -106,6 +106,12 @@ def _default_haifa_jar() -> Path:
 
 
 def _dataset_manifest_path(config: EvaluationConfig) -> Path:
+    configured = os.environ.get("HAIFA_EVAL_DATASET_MANIFEST_PATH")
+    if configured:
+        path = Path(configured).expanduser().resolve()
+        if not path.is_file():
+            raise ValueError("HAIFA_EVAL_DATASET_MANIFEST_PATH does not point to a file")
+        return path
     repository = Path(__file__).resolve().parents[2]
     return repository / "evals" / f"{config.id}.dataset.toml"
 
