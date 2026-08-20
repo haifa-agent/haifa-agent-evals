@@ -67,6 +67,10 @@ def build_commands(config: EvaluationConfig, work_dir: Path) -> list[list[str]]:
 
 def _child_environment(work_dir: Path) -> dict[str, str]:
     environment = os.environ.copy()
+    # Harbor renders Unicode summary tables after a job. Force UTF-8 for the
+    # child process so a successful Windows run cannot fail on a legacy code page.
+    environment["PYTHONUTF8"] = "1"
+    environment["PYTHONIOENCODING"] = "utf-8"
     if "DEEPSEEK_API_KEY" in environment:
         environment.setdefault("OPENAI_API_KEY", environment["DEEPSEEK_API_KEY"])
     podman = shutil.which("podman", path=environment.get("PATH"))

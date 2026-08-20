@@ -2,7 +2,13 @@ import json
 from pathlib import Path
 
 from haifa_agent_evals.config import Candidate, EvaluationConfig, load_config
-from haifa_agent_evals.runner import _default_haifa_jar, build_commands, build_job_config, run
+from haifa_agent_evals.runner import (
+    _child_environment,
+    _default_haifa_jar,
+    build_commands,
+    build_job_config,
+    run,
+)
 
 
 def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:
@@ -63,6 +69,18 @@ def test_default_jar_is_in_sibling_haifa_agent_repository() -> None:
         "target",
         "haifa-agent-cli-0.1.0-SNAPSHOT.jar",
     )
+
+
+def test_child_environment_forces_utf8_for_harbor_output(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("PYTHONUTF8", "0")
+    monkeypatch.setenv("PYTHONIOENCODING", "gbk")
+
+    environment = _child_environment(tmp_path)
+
+    assert environment["PYTHONUTF8"] == "1"
+    assert environment["PYTHONIOENCODING"] == "utf-8"
 
 
 def test_checked_in_aider_route_survives_harbor_provider_split(tmp_path: Path) -> None:
