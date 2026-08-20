@@ -81,6 +81,17 @@ uv run evals run --config "$root/coding-smoke-v1-agent-infra-v1.yaml"
 
 这样 Harbor 会使用每道题的预构建 RepoDigest，跳过 Dockerfile 构建；Haifa 与 Aider adapter 随后分别验证 Java 21 和 Aider 0.86.2 并跳过大体积安装。
 
+每个 Haifa Trial 都启用 `SQLITE_WITH_JSONL`。运行期间 SQLite 和 transcript JSONL 写入 Container
+本地 `/tmp`，CLI 退出并关闭数据库后，Adapter 会把以下复盘证据归档到 Harbor Trial 的 `agent/`
+目录；任一轨迹缺失或为空都会使 Trial 明确失败，避免容器删除后得到无法复盘的成绩：
+
+- `haifa-runtime.db`：SQLite 权威运行数据；
+- `haifa-transcripts/*.jsonl`：持久化 transcript 投影；
+- `haifa-trace.jsonl`：CLI 安全事件轨迹。
+
+这些文件可能包含题目、模型输出和工具参数，只能作为私有运行数据保存；公开报告前必须完成凭据、
+推理内容、Provider 原始响应和宿主路径扫描。
+
 ## 配置与执行约束
 
 `evals/coding-smoke-v1.yaml` 已固定：

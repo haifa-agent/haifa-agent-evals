@@ -65,8 +65,9 @@ java -jar /opt/haifa/haifa-agent.jar
 - stdin 关闭；
 - 不追加 Haifa 专用解题提示；
 - 不使用 Terminal、Resume 或 `--verbose`；
-- 每个 Trial 使用独立 Trace 和 SQLite；SQLite/Transcript 位于 Container 本地临时文件系统，避免依赖
-  宿主 bind mount 的文件锁语义，Trace 仍写入 `/logs/agent/`；
+- 每个 Trial 使用独立 Trace 和 SQLite；运行期间 SQLite/Transcript 位于 Container 本地临时文件系统，
+  避免依赖宿主 bind mount 的文件锁语义；CLI 退出后必须把关闭的 SQLite 和 transcript JSONL 复制到
+  `/logs/agent/`，并在删除 Container 前验证二者都非空；
 - Candidate 非零退出不能阻止 Harbor Verifier。
 
 ## 5. Eval 配置
@@ -78,8 +79,9 @@ java -jar /opt/haifa/haifa-agent.jar
 - `approval.mode: auto`；
 - `execution.provider: host-guarded`，外层 Container 是安全边界；
 - 固定 50 Iterations、32 Tool Calls 和命令输出上限；
-- SQLite 与 Transcript 位于本 Trial 的 Container 本地 `/tmp`，不作为报告产物；安全 Trace 位于
-  `/logs/agent/`。
+- SQLite 与 Transcript 在运行期间位于本 Trial 的 Container 本地 `/tmp`；CLI 退出后分别归档为
+  `/logs/agent/haifa-runtime.db` 和 `/logs/agent/haifa-transcripts/`。安全 Trace 位于
+  `/logs/agent/haifa-trace.jsonl`。
 
 ## 6. 输出
 
@@ -87,7 +89,9 @@ Adapter 只写入：
 
 - CLI exit code；
 - JAR/config digest；
-- `/logs/agent/haifa-trace.jsonl`。
+- `/logs/agent/haifa-trace.jsonl`；
+- CLI 关闭后的 `/logs/agent/haifa-runtime.db`；
+- `/logs/agent/haifa-transcripts/` 下的安全 transcript JSONL。
 
 stdout/stderr、started/finished/duration、timeout 和 Artifact 生命周期由 Harbor 记录，Adapter 不复制。
 

@@ -18,10 +18,16 @@ class _ExecResult:
 
 
 class _FakeEnvironment:
-    def __init__(self, run_exit_code: int = 0, java_available: bool = True) -> None:
+    def __init__(
+        self,
+        run_exit_code: int = 0,
+        java_available: bool = True,
+        archive_exit_code: int = 0,
+    ) -> None:
         self.default_user = "agent"
         self.run_exit_code = run_exit_code
         self.java_available = java_available
+        self.archive_exit_code = archive_exit_code
         self.commands: list[tuple[str, object, dict[str, str] | None]] = []
         self.uploads: list[tuple[Path, str]] = []
 
@@ -39,6 +45,8 @@ class _FakeEnvironment:
             return _ExecResult(return_code=0 if self.java_available else 1)
         if "--message" in command:
             return _ExecResult(return_code=self.run_exit_code)
+        if "haifa-runtime.db" in command:
+            return _ExecResult(return_code=self.archive_exit_code)
         return _ExecResult()
 
     async def upload_file(self, source: Path, target: str) -> None:
@@ -148,8 +156,23 @@ def test_run_preserves_exit_code_and_quotes_instruction(tmp_path: Path, exit_cod
     else:
         asyncio.run(agent.run(instruction, environment, context))  # type: ignore[arg-type]
 
-    command = environment.commands[-1][0]
+    command = next(command for command, _, _ in environment.commands if "--message" in command)
     assert "'fix '" in command
     assert "echo unsafe'" in command
-    assert context.metadata == {"exit_code": exit_code}
+    assert context.metadata == {"exit_code": exit_code, "trajectory_archived": True}
     assert "DEEPSEEK_API_KEY" not in command
+
+    archive_command = environment.commands[-1][0]
+    assert "install -m 0600 /tmp/haifa-runtime.db /logs/agent/haifa-runtime.db" in archive_command
+    assert "cp -a /tmp/haifa-transcripts/. /logs/agent/haifa-transcripts/" in archive_command
+
+
+def test_run_fails_when_sqlite_and_jsonl_cannot_be_archived(tmp_path: Path) -> None:
+    agent = _agent(tmp_path)
+    environment = _FakeEnvironment(archive_exit_code=1)
+    context = AgentContext()
+
+    with pytest.raises(RuntimeError, match="trajectory could not be archived"):
+        asyncio.run(agent.run("fix it", environment, context))  # type: ignore[arg-type]
+
+    assert context.metadata == {"exit_code": 0, "trajectory_archived": False}

@@ -13,7 +13,10 @@ from harbor.models.agent.context import AgentContext
 _CONTAINER_ROOT = "/opt/haifa"
 _JAR_PATH = f"{_CONTAINER_ROOT}/haifa-agent.jar"
 _CONFIG_PATH = f"{_CONTAINER_ROOT}/haifa-eval.yaml"
+_DATABASE_PATH = "/tmp/haifa-runtime.db"
 _TRANSCRIPT_ROOT = "/tmp/haifa-transcripts"
+_ARCHIVED_DATABASE_PATH = "/logs/agent/haifa-runtime.db"
+_ARCHIVED_TRANSCRIPT_ROOT = "/logs/agent/haifa-transcripts"
 _JAVA_ARCHIVE_PATH = "/tmp/haifa-java.tar.gz"
 _JAVA_ARCHIVE_URL = (
     "https://github.com/adoptium/temurin21-binaries/releases/download/"
@@ -148,7 +151,23 @@ class HaifaCodingAgent(BaseInstalledAgent):
             f"--message {shlex.quote(instruction)}"
         )
         result = await environment.exec(command=command, timeout_sec=1200)
-        context.metadata = {"exit_code": result.return_code}
+        archive = await environment.exec(
+            command=(
+                "set -eu; "
+                f"test -s {_DATABASE_PATH}; "
+                f"find {_TRANSCRIPT_ROOT} -type f -name '*.jsonl' -size +0c | grep -q .; "
+                f"install -m 0600 {_DATABASE_PATH} {_ARCHIVED_DATABASE_PATH}; "
+                f"rm -rf {_ARCHIVED_TRANSCRIPT_ROOT}; "
+                f"install -d -m 0700 {_ARCHIVED_TRANSCRIPT_ROOT}; "
+                f"cp -a {_TRANSCRIPT_ROOT}/. {_ARCHIVED_TRANSCRIPT_ROOT}/"
+            )
+        )
+        context.metadata = {
+            "exit_code": result.return_code,
+            "trajectory_archived": archive.return_code == 0,
+        }
+        if archive.return_code != 0:
+            raise RuntimeError("Haifa SQLite/JSONL trajectory could not be archived")
         if result.return_code != 0:
             raise NonZeroAgentExitCodeError(
                 f"Haifa CLI exited with code {result.return_code}; verifier remains authoritative"
