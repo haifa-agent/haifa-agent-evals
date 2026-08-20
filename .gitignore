@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 work/
 reports/
+run_data/
 *.db
 *.sqlite
 *.jsonl
