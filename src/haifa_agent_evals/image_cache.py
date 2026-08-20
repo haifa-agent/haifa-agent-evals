@@ -208,10 +208,21 @@ def _pinned_reference(image: str, inspected: dict[str, Any]) -> str:
     raise ValueError("built image has no content digest")
 
 
-def _agent_ready_dockerfile(source_reference: str, infra_reference: str) -> str:
+def _agent_ready_dockerfile(
+    source_reference: str,
+    infra_reference: str,
+    replace_workspace: bool = False,
+) -> str:
+    workspace = (
+        "RUN find /app -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +\n"
+        "COPY workspace/ /app/\n"
+        if replace_workspace
+        else ""
+    )
     return (
         f"FROM {infra_reference} AS haifa_agent_infra\n\n"
         f"FROM {source_reference}\n\n"
+        f"{workspace}"
         "COPY --from=haifa_agent_infra /opt/haifa/java /opt/haifa/java\n"
         "COPY --from=haifa_agent_infra /opt/haifa/agent-infra.properties "
         "/opt/haifa/agent-infra.properties\n"
@@ -282,20 +293,7 @@ def _cached_task_image(
         for image in inventory
         if any(slug in str(tag) for tag in image.get("RepoTags") or [])
     ]
-    dockerfile = (source_task / "environment" / "Dockerfile").read_text(encoding="utf-8")
-    signature = _task_image_signature(dockerfile)
-    candidates = tagged or [
-        image
-        for image in inventory
-        if image.get("Config", {}).get("WorkingDir") == "/app"
-        and signature
-        in "\n".join(str(entry.get("created_by", "")) for entry in image.get("History", []))
-        and any(
-            "COPY dir:" in str(entry.get("created_by", ""))
-            for entry in image.get("History", [])
-        )
-    ]
-    for image in candidates:
+    for image in tagged:
         image_id = str(image["Id"])
         completed = subprocess.run(  # noqa: S603
             [
@@ -316,6 +314,33 @@ def _cached_task_image(
         if completed.stdout.strip() == expected_hash:
             return image_id
     raise ValueError(f"no cached Harbor task image matches workspace: {slug}")
+
+
+def _cached_language_image(
+    source_task: Path,
+    inventory: list[dict[str, Any]],
+) -> str:
+    dockerfile = (source_task / "environment" / "Dockerfile").read_text(encoding="utf-8")
+    signature = _task_image_signature(dockerfile)
+    candidates = sorted(
+        (
+            image
+            for image in inventory
+            if image.get("Config", {}).get("WorkingDir") == "/app"
+            and any(
+                "localhost/haifa-agent-evals/source-task-" in str(tag)
+                for tag in image.get("RepoTags") or []
+            )
+            and signature
+            in "\n".join(str(entry.get("created_by", "")) for entry in image.get("History", []))
+        ),
+        key=lambda image: str(image["Id"]),
+    )
+    if not candidates:
+        raise ValueError(
+            f"no cached Harbor language image matches task Dockerfile: {source_task.name}"
+        )
+    return str(candidates[0]["Id"])
 
 
 def _image_inventory(cli: str) -> list[dict[str, Any]]:
@@ -427,7 +452,12 @@ def prepare_task_images(
         dockerfile = generated_task / "environment" / "Dockerfile"
         source_digest = Packager.compute_content_hash(source_task)[0]
         safe_slug = re.sub(r"[^a-z0-9_.-]+", "-", slug.lower())
-        source_image_id = _cached_task_image(cli, source_task, inventory)
+        replace_workspace = False
+        try:
+            source_image_id = _cached_task_image(cli, source_task, inventory)
+        except ValueError:
+            source_image_id = _cached_language_image(source_task, inventory)
+            replace_workspace = True
         source_image_tag = (
             f"localhost/haifa-agent-evals/source-task-{safe_slug}:{source_digest[:16]}"
         )
@@ -437,10 +467,16 @@ def prepare_task_images(
         )
         source_reference = _pinned_reference(source_image_tag, _inspect(cli, source_image_tag))
         dockerfile.write_text(
-            _agent_ready_dockerfile(source_reference, infra_reference),
+            _agent_ready_dockerfile(
+                source_reference,
+                infra_reference,
+                replace_workspace=replace_workspace,
+            ),
             encoding="utf-8",
         )
-        identity = hashlib.sha256(f"{source_digest}:{infra_reference}".encode()).hexdigest()[:16]
+        identity = hashlib.sha256(
+            f"{source_digest}:{source_reference}:{infra_reference}".encode()
+        ).hexdigest()[:16]
         image_tag = f"localhost/haifa-agent-evals/task-{safe_slug}:{identity}"
         subprocess.run(  # noqa: S603
             [
@@ -471,7 +507,7 @@ def prepare_task_images(
     manifest = DatasetManifest(
         dataset=DatasetInfo(
             name=dataset_name,
-            description="Pinned coding smoke tasks with the Haifa/Aider infrastructure image",
+            description="Pinned coding tasks with the Haifa/Aider infrastructure image",
         ),
         tasks=task_refs,
     )

@@ -65,6 +65,17 @@ def test_agent_ready_dockerfile_copies_only_infrastructure() -> None:
     assert "haifa-agent.jar" not in generated
 
 
+def test_agent_ready_dockerfile_can_replace_workspace_on_language_base() -> None:
+    generated = image_cache._agent_ready_dockerfile(
+        "localhost/task@sha256:source",
+        "localhost/infra@sha256:exact",
+        replace_workspace=True,
+    )
+
+    assert "find /app -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +" in generated
+    assert "COPY workspace/ /app/" in generated
+
+
 def test_task_prebuilt_image_is_digest_pinned() -> None:
     generated = image_cache._task_with_prebuilt_image(
         '[environment]\ncpus = 1\n',

@@ -1,7 +1,7 @@
 # Deterministic balanced subset of the pinned Aider polyglot dataset.
 # Selection: for each language, sort tasks by SHA-256(task name) and take the first five.
 id: coding-polyglot-30-v1
-dataset: aider/aider-polyglot@sha256:01e28d85e46beae5b7e29a29f57cb49d882b5486583d52cec4ee5bf3540a1c84
+dataset: haifa/coding-polyglot-30-v1@sha256:2d7521164c69b01767d5e783842981b92670c6224deb74c868311485be165ac8
 tasks:
   - aider/polyglot_cpp_knapsack
   - aider/polyglot_cpp_perfect-numbers

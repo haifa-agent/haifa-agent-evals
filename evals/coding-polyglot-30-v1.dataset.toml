@@ -1,0 +1,127 @@
+# Balanced subset of aider/aider-polyglot@sha256:01e28d85e46beae5b7e29a29f57cb49d882b5486583d52cec4ee5bf3540a1c84.
+# Within each language, tasks are ordered by SHA-256(task name); the first five are selected.
+[dataset]
+name = "haifa/coding-polyglot-30-v1"
+description = "Balanced 30-task subset of pinned aider/aider-polyglot"
+authors = []
+keywords = []
+
+[[tasks]]
+name = "aider/polyglot_cpp_knapsack"
+digest = "sha256:a0e9dcde998725e49f34350a4cfe783dbe3cac102a9ca6f6e7d134f52d5221d4"
+
+[[tasks]]
+name = "aider/polyglot_cpp_perfect-numbers"
+digest = "sha256:ba53834c31712e3db1664942a4f3b55366c75406faf1d00f8f0e252e7e772d72"
+
+[[tasks]]
+name = "aider/polyglot_cpp_binary-search-tree"
+digest = "sha256:b56f75313631ce8e7087fa2f83cc126bf5e5c31c46bd4fad38de13287ff418f8"
+
+[[tasks]]
+name = "aider/polyglot_cpp_phone-number"
+digest = "sha256:8bd0fd8316603c443f962e9230dcb0de111606c4e98e602f0785dc6a7d230be6"
+
+[[tasks]]
+name = "aider/polyglot_cpp_queen-attack"
+digest = "sha256:770519c3362779824677e083916df236acacc9e80d596c2b650f547348b7bbaf"
+
+[[tasks]]
+name = "aider/polyglot_go_food-chain"
+digest = "sha256:03000d522a3fb2ce7360dadfcaab23b0928b41c65ce9dcb90feaaffb8a9028ee"
+
+[[tasks]]
+name = "aider/polyglot_go_say"
+digest = "sha256:946e70bdc67888653dee717bea643008805bf9562ad1262cbe1348391e77e72c"
+
+[[tasks]]
+name = "aider/polyglot_go_pov"
+digest = "sha256:c68bd7a2f454ecbf20b291247125b51aeca1b9cd0f9ce63f627be26ac492b535"
+
+[[tasks]]
+name = "aider/polyglot_go_error-handling"
+digest = "sha256:f0b69d2af74c8447fde3196ab678fae984a9f6b342fee711bba174cd015db064"
+
+[[tasks]]
+name = "aider/polyglot_go_poker"
+digest = "sha256:a5e5308d772d2dffac00967ac47980ffcce211c1e0bdf0921ae9e68c2834780a"
+
+[[tasks]]
+name = "aider/polyglot_java_affine-cipher"
+digest = "sha256:a7466808812aadf91ac80c70ca6c80fdc9cbb8b71c27a3d6f6804b900b9c551e"
+
+[[tasks]]
+name = "aider/polyglot_java_bottle-song"
+digest = "sha256:185cac83fceb8fa7ead40d002a7c2581445324b9728fa7c18794f2f2a4b1df4b"
+
+[[tasks]]
+name = "aider/polyglot_java_simple-linked-list"
+digest = "sha256:bec08c01abe2c81406bcc9f34c62ffea5b2953ceb0d1839ead41c85445ffa2b3"
+
+[[tasks]]
+name = "aider/polyglot_java_change"
+digest = "sha256:e5f100785878fb71fffd79481f22796b27e6f446ba65a03f6d4d443dd3f61d6e"
+
+[[tasks]]
+name = "aider/polyglot_java_react"
+digest = "sha256:1d49ac6dc4b72f422458b1bdbe902fe8ac0295fa6e4d7335838947198fe31380"
+
+[[tasks]]
+name = "aider/polyglot_javascript_wordy"
+digest = "sha256:0011ca971b9cf52f2d46db66540c99052f9951665ae31a506e1af7a6c2b0fb43"
+
+[[tasks]]
+name = "aider/polyglot_javascript_bowling"
+digest = "sha256:285a9206da1d1e462bfc39143622fd7800a84f4e583e6bbfece1ee05081ab760"
+
+[[tasks]]
+name = "aider/polyglot_javascript_grep"
+digest = "sha256:829a3b7a12fc1b1ff7f969c4d5bae64bc1f763dc83c50575e4b1049e06c025b2"
+
+[[tasks]]
+name = "aider/polyglot_javascript_parallel-letter-frequency"
+digest = "sha256:138764352a3cafec65be4a2a6c27cc67fb3f4228cc2de45da08f6c749a01d88f"
+
+[[tasks]]
+name = "aider/polyglot_javascript_rest-api"
+digest = "sha256:579f27a05fee44e04cccaf4abbf8bbbaf6bee80a04062bd151a94e0427a231d9"
+
+[[tasks]]
+name = "aider/polyglot_python_pov"
+digest = "sha256:f37c8a1599555bdc97bf191fafd33de620e03938939a8804ecf5af94ad65b0db"
+
+[[tasks]]
+name = "aider/polyglot_python_bowling"
+digest = "sha256:3e18f454505793946584c0665a8816b93faf0ed4be8c38a9d62005f0e5121d75"
+
+[[tasks]]
+name = "aider/polyglot_python_wordy"
+digest = "sha256:02b0bca93b2623b10b47b924ff033b655b54184fbdbd7e71bea3f8a2c7a2d6c7"
+
+[[tasks]]
+name = "aider/polyglot_python_book-store"
+digest = "sha256:02053bf84c77b5c5438920bcd11f5393a8ee06fd5dfb73e5adc77ce6d13cbe15"
+
+[[tasks]]
+name = "aider/polyglot_python_forth"
+digest = "sha256:d8532bf5ed103b7917bb9cbb872d0a414be551ebc06234f92cc3f4d6a6e81ac0"
+
+[[tasks]]
+name = "aider/polyglot_rust_macros"
+digest = "sha256:daa81a0a75455d6ac9889eaafb1b65edf3f8f09616be11024333d3f72663eaec"
+
+[[tasks]]
+name = "aider/polyglot_rust_alphametics"
+digest = "sha256:a11a7ce3f3f3248af82527ba7afa403e0466dac0941ee78588122d3e695203fa"
+
+[[tasks]]
+name = "aider/polyglot_rust_doubly-linked-list"
+digest = "sha256:6d3b7b11e7c0dc905cfdce7bf87a926fea05b1a9f01bebd7fd1ca89f053ad199"
+
+[[tasks]]
+name = "aider/polyglot_rust_variable-length-quantity"
+digest = "sha256:d3faf1513ab73ad88a72731d8318f82fc53d4e9cd91ad88b0ce4b8ff290c1434"
+
+[[tasks]]
+name = "aider/polyglot_rust_decimal"
+digest = "sha256:73c9cf50fafae44864f5ecb4f7e104d7eadf91cfe3a9020b3dcb798543de466e"
