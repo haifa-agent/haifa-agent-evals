@@ -49,7 +49,10 @@ def build_job_config(
             "task_names": list(config.tasks),
         }
     else:
-        dataset = {"path": str(tasks_path.resolve())}
+        dataset = {
+            "path": str(tasks_path.resolve()),
+            "task_names": [task.rsplit("/", 1)[-1] for task in config.tasks],
+        }
     environment: dict[str, object] = {"type": "docker", "delete": True}
     if extra_docker_compose is not None:
         environment["extra_docker_compose"] = [str(extra_docker_compose.resolve())]

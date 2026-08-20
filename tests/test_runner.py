@@ -63,7 +63,29 @@ def test_uses_complete_local_task_cache(tmp_path: Path, monkeypatch) -> None:
     assert plan_data["datasetSource"] == str(tasks.resolve())
     job_config = (tmp_path / "smoke-harbor-job.yaml").read_text(encoding="utf-8")
     assert "path:" in job_config
+    assert "task_names:" in job_config
+    assert "- task-a" in job_config
     assert "name: org/data" not in job_config
+
+
+def test_filters_a_shared_local_dataset_to_configured_tasks(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@sha256:exact",
+        tasks=("org/task-a", "org/task-c"),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "provider/model"),),
+    )
+
+    job_config = build_job_config(config, tmp_path, tmp_path / "shared-tasks")
+
+    assert job_config["datasets"] == [
+        {
+            "path": str((tmp_path / "shared-tasks").resolve()),
+            "task_names": ["task-a", "task-c"],
+        }
+    ]
 
 
 def test_adds_one_explicit_docker_compose_overlay(tmp_path: Path, monkeypatch) -> None:
