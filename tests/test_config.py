@@ -105,3 +105,42 @@ def test_polyglot_30_config_is_balanced_and_haifa_only() -> None:
         f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}"
     )
     assert {task.name for task in manifest.tasks} == set(config.tasks)
+
+
+def test_cpp_verifier_fixed_polyglot_30_config_matches_manifest() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    config = load_config(
+        repository / "evals" / "coding-polyglot-30-v1-cpp-verifier-fixed.yaml"
+    )
+    manifest = DatasetManifest.from_toml_file(
+        repository
+        / "evals"
+        / "coding-polyglot-30-v1-cpp-verifier-fixed.dataset.toml"
+    )
+
+    assert len(config.tasks) == 30
+    assert [candidate.id for candidate in config.candidates] == ["haifa"]
+    assert config.dataset == (
+        f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}"
+    )
+    assert {task.name for task in manifest.tasks} == set(config.tasks)
+
+
+def test_cpp_verifier_reward_fallback_patch_covers_selected_cpp_tasks() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    patch = (
+        repository
+        / "evals"
+        / "patches"
+        / "aider-polyglot-selected-cpp-reward-fallback.patch"
+    ).read_text(encoding="utf-8")
+
+    assert patch.count("+trap write_default_reward EXIT") == 5
+    for task in (
+        "knapsack",
+        "perfect-numbers",
+        "binary-search-tree",
+        "phone-number",
+        "queen-attack",
+    ):
+        assert f"polyglot_cpp_{task}/tests/test.sh" in patch

@@ -1,0 +1,42 @@
+# Deterministic balanced subset of the pinned Aider polyglot dataset.
+# Selection: for each language, sort tasks by SHA-256(task name) and take the first five.
+# The five C++ verifiers apply patches/aider-polyglot-selected-cpp-reward-fallback.patch.
+id: coding-polyglot-30-v1-cpp-verifier-fixed
+dataset: haifa/coding-polyglot-30-v1-cpp-verifier-fixed@sha256:22900ec39227a17a76a293ff8ed1042fe7204f076b404f26f095158d02b3b9f0
+tasks:
+  - aider/polyglot_cpp_knapsack
+  - aider/polyglot_cpp_perfect-numbers
+  - aider/polyglot_cpp_binary-search-tree
+  - aider/polyglot_cpp_phone-number
+  - aider/polyglot_cpp_queen-attack
+  - aider/polyglot_go_food-chain
+  - aider/polyglot_go_say
+  - aider/polyglot_go_pov
+  - aider/polyglot_go_error-handling
+  - aider/polyglot_go_poker
+  - aider/polyglot_java_affine-cipher
+  - aider/polyglot_java_bottle-song
+  - aider/polyglot_java_simple-linked-list
+  - aider/polyglot_java_change
+  - aider/polyglot_java_react
+  - aider/polyglot_javascript_wordy
+  - aider/polyglot_javascript_bowling
+  - aider/polyglot_javascript_grep
+  - aider/polyglot_javascript_parallel-letter-frequency
+  - aider/polyglot_javascript_rest-api
+  - aider/polyglot_python_pov
+  - aider/polyglot_python_bowling
+  - aider/polyglot_python_wordy
+  - aider/polyglot_python_book-store
+  - aider/polyglot_python_forth
+  - aider/polyglot_rust_macros
+  - aider/polyglot_rust_alphametics
+  - aider/polyglot_rust_doubly-linked-list
+  - aider/polyglot_rust_variable-length-quantity
+  - aider/polyglot_rust_decimal
+attempts: 1
+timeoutMinutes: 20
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: deepseek-responses-flash

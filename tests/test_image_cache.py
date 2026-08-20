@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+from subprocess import CompletedProcess
 
 import pytest
 
@@ -99,3 +100,27 @@ def test_host_tree_hash_uses_case_sensitive_posix_relative_order(tmp_path: Path)
         expected.update(content)
 
     assert image_cache._host_tree_hash(tmp_path) == expected.hexdigest()
+
+
+def test_image_inventory_batches_inspection(monkeypatch: pytest.MonkeyPatch) -> None:
+    ids = [f"sha256:{index:064x}" for index in range(101)]
+    inspect_batch_sizes: list[int] = []
+
+    def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
+        if command[1:] == ["images", "-aq", "--no-trunc"]:
+            return CompletedProcess(command, 0, stdout="\n".join(ids), stderr="")
+        inspected = command[3:]
+        inspect_batch_sizes.append(len(inspected))
+        return CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps([{"Id": image_id} for image_id in inspected]),
+            stderr="",
+        )
+
+    monkeypatch.setattr(image_cache.subprocess, "run", run)
+
+    inventory = image_cache._image_inventory("podman")
+
+    assert inspect_batch_sizes == [50, 50, 1]
+    assert [entry["Id"] for entry in inventory] == ids

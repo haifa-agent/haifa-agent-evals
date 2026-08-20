@@ -373,15 +373,18 @@ def _image_inventory(cli: str) -> list[dict[str, Any]]:
     )
     if not ids:
         return []
-    completed = subprocess.run(  # noqa: S603
-        [cli, "image", "inspect", *ids],
-        check=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-    payload = json.loads(completed.stdout)
-    return [entry for entry in payload if isinstance(entry, dict)]
+    inventory: list[dict[str, Any]] = []
+    for offset in range(0, len(ids), 50):
+        completed = subprocess.run(  # noqa: S603
+            [cli, "image", "inspect", *ids[offset : offset + 50]],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        payload = json.loads(completed.stdout)
+        inventory.extend(entry for entry in payload if isinstance(entry, dict))
+    return inventory
 
 
 def _task_with_prebuilt_image(task_toml: str, image_reference: str) -> str:

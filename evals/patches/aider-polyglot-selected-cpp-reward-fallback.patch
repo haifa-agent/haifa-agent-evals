@@ -1,0 +1,65 @@
+diff --git a/polyglot_cpp_knapsack/tests/test.sh b/polyglot_cpp_knapsack/tests/test.sh
+--- a/polyglot_cpp_knapsack/tests/test.sh
++++ b/polyglot_cpp_knapsack/tests/test.sh
+@@ -4,1 +4,9 @@
+ set -Eeuo pipefail
++reward_file=/logs/verifier/reward.txt
++write_default_reward() {
++    if [ ! -s "$reward_file" ]; then
++        mkdir -p /logs/verifier
++        echo 0 > "$reward_file"
++    fi
++}
++trap write_default_reward EXIT
+diff --git a/polyglot_cpp_perfect-numbers/tests/test.sh b/polyglot_cpp_perfect-numbers/tests/test.sh
+--- a/polyglot_cpp_perfect-numbers/tests/test.sh
++++ b/polyglot_cpp_perfect-numbers/tests/test.sh
+@@ -4,1 +4,9 @@
+ set -Eeuo pipefail
++reward_file=/logs/verifier/reward.txt
++write_default_reward() {
++    if [ ! -s "$reward_file" ]; then
++        mkdir -p /logs/verifier
++        echo 0 > "$reward_file"
++    fi
++}
++trap write_default_reward EXIT
+diff --git a/polyglot_cpp_binary-search-tree/tests/test.sh b/polyglot_cpp_binary-search-tree/tests/test.sh
+--- a/polyglot_cpp_binary-search-tree/tests/test.sh
++++ b/polyglot_cpp_binary-search-tree/tests/test.sh
+@@ -4,1 +4,9 @@
+ set -Eeuo pipefail
++reward_file=/logs/verifier/reward.txt
++write_default_reward() {
++    if [ ! -s "$reward_file" ]; then
++        mkdir -p /logs/verifier
++        echo 0 > "$reward_file"
++    fi
++}
++trap write_default_reward EXIT
+diff --git a/polyglot_cpp_phone-number/tests/test.sh b/polyglot_cpp_phone-number/tests/test.sh
+--- a/polyglot_cpp_phone-number/tests/test.sh
++++ b/polyglot_cpp_phone-number/tests/test.sh
+@@ -4,1 +4,9 @@
+ set -Eeuo pipefail
++reward_file=/logs/verifier/reward.txt
++write_default_reward() {
++    if [ ! -s "$reward_file" ]; then
++        mkdir -p /logs/verifier
++        echo 0 > "$reward_file"
++    fi
++}
++trap write_default_reward EXIT
+diff --git a/polyglot_cpp_queen-attack/tests/test.sh b/polyglot_cpp_queen-attack/tests/test.sh
+--- a/polyglot_cpp_queen-attack/tests/test.sh
++++ b/polyglot_cpp_queen-attack/tests/test.sh
+@@ -4,1 +4,9 @@
+ set -Eeuo pipefail
++reward_file=/logs/verifier/reward.txt
++write_default_reward() {
++    if [ ! -s "$reward_file" ]; then
++        mkdir -p /logs/verifier
++        echo 0 > "$reward_file"
++    fi
++}
++trap write_default_reward EXIT
