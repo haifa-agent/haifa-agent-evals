@@ -1,0 +1,30 @@
+diff --git a/task.toml b/task.toml
+--- a/task.toml
++++ b/task.toml
+@@ -3,4 +3,4 @@
+ [task]
+-name = "aider/polyglot_cpp_gigasecond"
++name = "haifa/coding-smoke-cpp-gigasecond"
+ authors = []
+ keywords = []
+diff --git a/tests/test.sh b/tests/test.sh
+--- a/tests/test.sh
++++ b/tests/test.sh
+@@ -121,7 +121,7 @@ if [ -f "CMakeLists.txt" ]; then
+         find . -name "*test*" -executable -type f -exec echo "Running: {}" \; -exec {} \; ||         find . -name "test_*" -executable -type f -exec echo "Running: {}" \; -exec {} \; ||         ctest --output-on-failure --verbose || echo "No test executables found"
+     else
+         echo "CMake build failed"
+-        exit 1
++        false
+     fi
+ else
+     echo "No CMakeLists.txt found, trying direct compilation..."
+@@ -131,7 +131,7 @@ else
+         g++ -std=c++17 -I. $TEST_FILES *.cpp -o test_executable 2>/dev/null &&         echo "Running test executable..." && ./test_executable
+     else
+         echo "No test files found for compilation"
+-        exit 1
++        false
+     fi
+ fi
+ exit_code=$?

@@ -1,10 +1,16 @@
 import json
 from pathlib import Path
 
+import pytest
+import yaml
+from harbor.models.dataset.manifest import DatasetInfo, DatasetManifest, DatasetTaskRef
+from harbor.publisher.packager import Packager
+
 from haifa_agent_evals.config import Candidate, EvaluationConfig, load_config
 from haifa_agent_evals.runner import (
     _child_environment,
     _default_haifa_jar,
+    _validate_local_dataset,
     build_commands,
     build_job_config,
     run,
@@ -58,6 +64,75 @@ def test_uses_complete_local_task_cache(tmp_path: Path, monkeypatch) -> None:
     job_config = (tmp_path / "smoke-harbor-job.yaml").read_text(encoding="utf-8")
     assert "path:" in job_config
     assert "name: org/data" not in job_config
+
+
+def test_adds_one_explicit_docker_compose_overlay(tmp_path: Path, monkeypatch) -> None:
+    overlay = tmp_path / "cache.compose.yaml"
+    overlay.write_text("services: {}\n", encoding="utf-8")
+    monkeypatch.setenv("HAIFA_EVAL_EXTRA_DOCKER_COMPOSE", str(overlay))
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@sha256:exact",
+        tasks=("org/task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("aider", "aider", "provider/model"),),
+    )
+
+    plan = run(config, tmp_path / "job", plan_only=True)
+
+    plan_data = json.loads(plan.read_text(encoding="utf-8"))
+    assert plan_data["extraDockerCompose"] == str(overlay.resolve())
+    job_config = yaml.safe_load(
+        (tmp_path / "smoke-harbor-job.yaml").read_text(encoding="utf-8")
+    )
+    assert job_config["environment"]["extra_docker_compose"] == [str(overlay.resolve())]
+
+
+def test_rejects_missing_docker_compose_overlay(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HAIFA_EVAL_EXTRA_DOCKER_COMPOSE", str(tmp_path / "missing.yaml"))
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@sha256:exact",
+        tasks=("org/task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("aider", "aider", "provider/model"),),
+    )
+
+    with pytest.raises(ValueError, match="does not point to a file"):
+        run(config, tmp_path / "job", plan_only=True)
+
+
+def test_validates_local_tasks_against_pinned_manifest(tmp_path: Path) -> None:
+    tasks = tmp_path / "tasks"
+    task = tasks / "task-a"
+    task.mkdir(parents=True)
+    (task / "task.toml").write_text(
+        'version = "1.0"\n[task]\nname = "org/task-a"\n', encoding="utf-8"
+    )
+    (task / "instruction.md").write_text("solve it\n", encoding="utf-8")
+    task_digest = f"sha256:{Packager.compute_content_hash(task)[0]}"
+    manifest = DatasetManifest(
+        dataset=DatasetInfo(name="org/data"),
+        tasks=[DatasetTaskRef(name="org/task-a", digest=task_digest)],
+    )
+    manifest_path = tmp_path / "dataset.toml"
+    manifest_path.write_text(manifest.to_toml(), encoding="utf-8")
+    config = EvaluationConfig(
+        id="smoke",
+        dataset=f"org/data@sha256:{manifest.compute_content_hash()}",
+        tasks=("org/task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("aider", "aider", "provider/model"),),
+    )
+
+    _validate_local_dataset(config, tasks, manifest_path)
+
+    (task / "instruction.md").write_text("changed\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="local task digest does not match manifest"):
+        _validate_local_dataset(config, tasks, manifest_path)
 
 
 def test_default_jar_is_in_sibling_haifa_agent_repository() -> None:

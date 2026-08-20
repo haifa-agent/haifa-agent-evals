@@ -1,7 +1,7 @@
 id: coding-smoke-v1
-dataset: aider/aider-polyglot@sha256:01e28d85e46beae5b7e29a29f57cb49d882b5486583d52cec4ee5bf3540a1c84
+dataset: haifa/coding-smoke-v1-cpp-verifier-fixed@sha256:80302f17fa66fc5f08a72339635672594eaed941e6738aca627fa472dab52a79
 tasks:
-  - aider/polyglot_cpp_gigasecond
+  - haifa/coding-smoke-cpp-gigasecond
   - aider/polyglot_go_wordy
   - aider/polyglot_java_circular-buffer
   - aider/polyglot_javascript_grade-school

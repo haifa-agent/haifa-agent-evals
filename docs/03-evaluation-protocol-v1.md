@@ -38,7 +38,8 @@ CLI 退出 0 不等于 PASS；CLI 退出 1/2 也不自动等于 ERROR。只要 T
 
 ## 4. 评分
 
-- 官方 Harbor Task Verifier 是唯一正确性来源；
+- Harbor Task Verifier 是唯一正确性来源；C++ 使用受版本控制的派生版本，只修复编译失败后未写 reward
+  的控制流，不修改测试断言或通过标准；
 - stdout、自然语言回答、CLI exit 和 Trace 不用于评分；
 - Verifier 自身失败记 ERROR，不给 Candidate 记 0 分；
 - 有效通过率为 `PASS / (PASS + FAIL)`；

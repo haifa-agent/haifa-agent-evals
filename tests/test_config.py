@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from harbor.models.dataset.manifest import DatasetManifest
 
 from haifa_agent_evals.config import load_config
 
@@ -67,3 +68,16 @@ def test_rejects_multiple_attempts_in_mvp(tmp_path: Path) -> None:
 def test_rejects_eval_id_that_can_escape_work_directory(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="must contain only"):
         load_config(_write(tmp_path, BASE.replace("id: smoke", "id: ../outside")))
+
+
+def test_checked_in_dataset_manifest_matches_evaluation_config() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    config = load_config(repository / "evals" / "coding-smoke-v1.yaml")
+    manifest = DatasetManifest.from_toml_file(
+        repository / "evals" / "coding-smoke-v1.dataset.toml"
+    )
+    dataset_name, dataset_ref = config.dataset.rsplit("@", 1)
+
+    assert manifest.dataset.name == dataset_name
+    assert f"sha256:{manifest.compute_content_hash()}" == dataset_ref
+    assert {task.name for task in manifest.tasks} == set(config.tasks)

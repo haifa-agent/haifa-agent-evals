@@ -67,6 +67,7 @@ reports/coding-smoke-v1/comparison.md
 
 - 固定 Harbor 0.20.0；
 - 接入 `aider/aider-polyglot` 精确版本；
+- 固定只修复 C++ reward 写入控制流的本地派生 Dataset Manifest；
 - 按固定规则选择 6 个语言 Tasks；
 - 实现 Haifa `BaseInstalledAgent`；
 - 创建无密钥 `haifa-eval.yaml`；
@@ -76,6 +77,7 @@ reports/coding-smoke-v1/comparison.md
 ### 测试
 
 - 6 个 Oracle 全 PASS、nop 全 FAIL；
+- 本地 Task 内容与 Manifest 中的六个 Task 摘要、Dataset 摘要完全一致；
 - 当前 Haifa JAR `--help` 在 Container 内退出 0；
 - Instruction 安全传递；
 - exit 0/1/2 不阻止 Verifier；

@@ -1,0 +1,35 @@
+# Derived from aider/aider-polyglot@sha256:01e28d85e46beae5b7e29a29f57cb49d882b5486583d52cec4ee5bf3540a1c84.
+# The C++ task starts from aider/polyglot_cpp_gigasecond@sha256:a9e07b9bbbfdbf0316b76e6c198d59c9ad47a656bfc12dd6d8ef8f6a6336b487.
+# Apply evals/patches/aider-polyglot-cpp-verifier-reward.patch before verifying its digest.
+
+schema_version = "1.0"
+
+[dataset]
+name = "haifa/coding-smoke-v1-cpp-verifier-fixed"
+description = "Coding Smoke v1 derived from pinned Aider Polyglot with a minimal C++ reward-emission fix"
+authors = []
+keywords = ["coding-agent", "aider-polyglot", "verifier-fix"]
+
+[[tasks]]
+name = "haifa/coding-smoke-cpp-gigasecond"
+digest = "sha256:29ea4f7279ea893178273d960c93493ecda905350457fd2b9047f66aab073ef4"
+
+[[tasks]]
+name = "aider/polyglot_go_wordy"
+digest = "sha256:5a7a4981655a46ddc9ae563c03a69b54bff7df73776e91d2f39306c0548a3d4c"
+
+[[tasks]]
+name = "aider/polyglot_java_circular-buffer"
+digest = "sha256:137d1d5a65a789375bc0598da64dcf9ee8c91e8c581deb563dd1631954cb50d8"
+
+[[tasks]]
+name = "aider/polyglot_javascript_grade-school"
+digest = "sha256:a09a5508714d793c8208cf0ea122039f3b39398dbf0e585114c3c1f61fe9f5cb"
+
+[[tasks]]
+name = "aider/polyglot_python_hangman"
+digest = "sha256:5e1598e7be2c361074eca8e9d3e6aea308ad1a95e4eb821816443bdf15bce2b3"
+
+[[tasks]]
+name = "aider/polyglot_rust_xorcism"
+digest = "sha256:492a9d36cd16976ef128792e5cd04f360c6cad0c5da5d6e4f6034adeab22f9c7"

@@ -16,13 +16,19 @@
 
 ## 2. Dataset 与 Tasks
 
-- Dataset：`aider/aider-polyglot@sha256:01e28d85e46beae5b7e29a29f57cb49d882b5486583d52cec4ee5bf3540a1c84`；
+- Dataset：`haifa/coding-smoke-v1-cpp-verifier-fixed@sha256:80302f17fa66fc5f08a72339635672594eaed941e6738aca627fa472dab52a79`；
+- 上游 Dataset：`aider/aider-polyglot@sha256:01e28d85e46beae5b7e29a29f57cb49d882b5486583d52cec4ee5bf3540a1c84`；
 - Harbor 版本：`0.20.0`；
 - 从 C++、Go、Java、JavaScript、Python、Rust 各选择 1 个 Task；
 - 选择规则：按 `SHA256(datasetVersion + taskId)` 排序，每种语言取第一个能通过离线校准的 Task；
-- Task IDs 已冻结为 `polyglot_cpp_gigasecond`、`polyglot_go_wordy`、
+- Task IDs 已冻结为 `coding-smoke-cpp-gigasecond`、`polyglot_go_wordy`、
   `polyglot_java_circular-buffer`、`polyglot_javascript_grade-school`、
   `polyglot_python_hangman`、`polyglot_rust_xorcism`，运行后不得更换。
+
+上游 26 个 C++ Task 的共同 verifier 在编译失败时提前退出，无法写出 reward。派生版本仅把所选
+`gigasecond` 的两处提前退出改为保留非零状态并继续写 `reward=0`，测试、Instruction、Oracle 和其他
+五个 Task 不变。派生 Task 和 Dataset 摘要由 Harbor 0.20.0 的内容哈希算法计算；Manifest 与补丁纳入
+版本控制，本次不发布到 Harbor Registry。
 
 离线校准只要求：
 
