@@ -6,15 +6,7 @@ from typing import Any
 
 import yaml
 
-_REQUIRED_EVAL_FIELDS = {
-    "id",
-    "dataset",
-    "tasks",
-    "attempts",
-    "timeoutMinutes",
-    "candidates",
-}
-_EVAL_FIELDS = _REQUIRED_EVAL_FIELDS | {"maxRetries"}
+_EVAL_FIELDS = {"id", "dataset", "tasks", "attempts", "timeoutMinutes", "candidates"}
 _CANDIDATE_FIELDS = {"id", "agent", "model"}
 _FLOATING_DATASET_REFS = {"latest", "main", "head"}
 _SAFE_ID_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
@@ -35,7 +27,6 @@ class EvaluationConfig:
     attempts: int
     timeout_minutes: int
     candidates: tuple[Candidate, ...]
-    max_retries: int = 0
 
 
 def _mapping(value: Any, label: str) -> dict[str, Any]:
@@ -62,7 +53,7 @@ def load_config(path: Path) -> EvaluationConfig:
         raw = _mapping(yaml.safe_load(stream), "evaluation config")
 
     unknown = set(raw) - _EVAL_FIELDS
-    missing = _REQUIRED_EVAL_FIELDS - set(raw)
+    missing = _EVAL_FIELDS - set(raw)
     if unknown:
         raise ValueError(f"unknown evaluation fields: {', '.join(sorted(unknown))}")
     if missing:
@@ -111,13 +102,6 @@ def load_config(path: Path) -> EvaluationConfig:
         raise ValueError("MVP supports exactly one attempt per candidate/task")
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout < 1:
         raise ValueError("timeoutMinutes must be a positive integer")
-    max_retries = raw.get("maxRetries", 0)
-    if (
-        not isinstance(max_retries, int)
-        or isinstance(max_retries, bool)
-        or max_retries not in (0, 1)
-    ):
-        raise ValueError("maxRetries must be 0 or 1")
 
     return EvaluationConfig(
         id=_safe_id(raw["id"], "id"),
@@ -126,5 +110,4 @@ def load_config(path: Path) -> EvaluationConfig:
         attempts=attempts,
         timeout_minutes=timeout,
         candidates=tuple(candidates),
-        max_retries=max_retries,
     )

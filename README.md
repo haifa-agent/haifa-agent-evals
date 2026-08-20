@@ -101,10 +101,6 @@ uv run evals run --config "$root/coding-smoke-v1-agent-infra-v3.yaml"
 
 ## 配置与执行约束
 
-`attempts` 仍固定为 `1`，避免把同一道题的多次采样混入分数。可选的 `maxRetries`
-只允许 `0` 或 `1`：设为 `1` 时，Harbor 仅会把发生异常的 Trial 整体重跑一次（例如 Provider
-瞬时返回无效响应）；已经得到有效 verifier 分数的 `reward=0` 属于能力失败，不会重试。
-
 `evals/coding-smoke-v1.yaml` 已固定：
 
 - Harbor 版本：`0.20.0`

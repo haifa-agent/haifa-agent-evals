@@ -35,7 +35,6 @@ def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:
 
     job_config = build_job_config(config, tmp_path)
     assert job_config["n_concurrent_trials"] == 1
-    assert job_config["retry"] == {"max_retries": 0}
     assert len(job_config["agents"]) == 2
     assert job_config["datasets"][0]["ref"] == "v1"
 
@@ -43,22 +42,6 @@ def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:
     assert plan.is_file()
     assert (tmp_path.parent / "smoke-harbor-job.yaml").is_file()
     assert not any(path.name == "result.json" for path in tmp_path.rglob("result.json"))
-
-
-def test_forwards_one_infrastructure_retry_to_harbor(tmp_path: Path) -> None:
-    config = EvaluationConfig(
-        id="smoke",
-        dataset="org/data@v1",
-        tasks=("task-a",),
-        attempts=1,
-        timeout_minutes=20,
-        candidates=(Candidate("haifa", "package:Haifa", "provider/model"),),
-        max_retries=1,
-    )
-
-    job_config = build_job_config(config, tmp_path)
-
-    assert job_config["retry"] == {"max_retries": 1}
 
 
 def test_uses_complete_local_task_cache(tmp_path: Path, monkeypatch) -> None:

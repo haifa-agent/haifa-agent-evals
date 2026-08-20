@@ -29,19 +29,6 @@ def test_loads_minimal_config(tmp_path: Path) -> None:
     config = load_config(_write(tmp_path, BASE))
     assert config.id == "smoke"
     assert config.tasks == ("task-a", "task-b")
-    assert config.max_retries == 0
-
-
-def test_loads_one_infrastructure_retry(tmp_path: Path) -> None:
-    config = load_config(_write(tmp_path, BASE + "maxRetries: 1\n"))
-
-    assert config.max_retries == 1
-
-
-@pytest.mark.parametrize("value", ["-1", "2", "true"])
-def test_rejects_invalid_infrastructure_retry(tmp_path: Path, value: str) -> None:
-    with pytest.raises(ValueError, match="maxRetries must be 0 or 1"):
-        load_config(_write(tmp_path, BASE + f"maxRetries: {value}\n"))
 
 
 @pytest.mark.parametrize("dataset", ["org/data", "org/data@latest", "org/data@main"])
@@ -172,7 +159,6 @@ def test_recovery_subset_contains_remaining_three_languages() -> None:
     languages = [task.split("_", 2)[1] for task in config.tasks]
 
     assert len(config.tasks) == 15
-    assert config.max_retries == 1
     assert {language: languages.count(language) for language in set(languages)} == {
         "java": 5,
         "python": 5,
