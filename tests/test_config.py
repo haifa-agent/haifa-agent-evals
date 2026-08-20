@@ -81,3 +81,20 @@ def test_checked_in_dataset_manifest_matches_evaluation_config() -> None:
     assert manifest.dataset.name == dataset_name
     assert f"sha256:{manifest.compute_content_hash()}" == dataset_ref
     assert {task.name for task in manifest.tasks} == set(config.tasks)
+
+
+def test_polyglot_30_config_is_balanced_and_haifa_only() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    config = load_config(repository / "evals" / "coding-polyglot-30-v1.yaml")
+    languages = [task.split("_", 2)[1] for task in config.tasks]
+
+    assert len(config.tasks) == 30
+    assert {language: languages.count(language) for language in set(languages)} == {
+        "cpp": 5,
+        "go": 5,
+        "java": 5,
+        "javascript": 5,
+        "python": 5,
+        "rust": 5,
+    }
+    assert [candidate.id for candidate in config.candidates] == ["haifa"]
