@@ -1,0 +1,66 @@
+# Recovery subset of haifa/coding-polyglot-30-v1-cpp-verifier-fixed.
+[dataset]
+name = "haifa/coding-polyglot-15-java-python-rust-v1"
+description = "Recovery subset containing the remaining Java, Python, and Rust tasks"
+authors = []
+keywords = []
+
+[[tasks]]
+name = "aider/polyglot_java_affine-cipher"
+digest = "sha256:a7466808812aadf91ac80c70ca6c80fdc9cbb8b71c27a3d6f6804b900b9c551e"
+
+[[tasks]]
+name = "aider/polyglot_java_bottle-song"
+digest = "sha256:185cac83fceb8fa7ead40d002a7c2581445324b9728fa7c18794f2f2a4b1df4b"
+
+[[tasks]]
+name = "aider/polyglot_java_simple-linked-list"
+digest = "sha256:bec08c01abe2c81406bcc9f34c62ffea5b2953ceb0d1839ead41c85445ffa2b3"
+
+[[tasks]]
+name = "aider/polyglot_java_change"
+digest = "sha256:e5f100785878fb71fffd79481f22796b27e6f446ba65a03f6d4d443dd3f61d6e"
+
+[[tasks]]
+name = "aider/polyglot_java_react"
+digest = "sha256:1d49ac6dc4b72f422458b1bdbe902fe8ac0295fa6e4d7335838947198fe31380"
+
+[[tasks]]
+name = "aider/polyglot_python_pov"
+digest = "sha256:f37c8a1599555bdc97bf191fafd33de620e03938939a8804ecf5af94ad65b0db"
+
+[[tasks]]
+name = "aider/polyglot_python_bowling"
+digest = "sha256:3e18f454505793946584c0665a8816b93faf0ed4be8c38a9d62005f0e5121d75"
+
+[[tasks]]
+name = "aider/polyglot_python_wordy"
+digest = "sha256:02b0bca93b2623b10b47b924ff033b655b54184fbdbd7e71bea3f8a2c7a2d6c7"
+
+[[tasks]]
+name = "aider/polyglot_python_book-store"
+digest = "sha256:02053bf84c77b5c5438920bcd11f5393a8ee06fd5dfb73e5adc77ce6d13cbe15"
+
+[[tasks]]
+name = "aider/polyglot_python_forth"
+digest = "sha256:d8532bf5ed103b7917bb9cbb872d0a414be551ebc06234f92cc3f4d6a6e81ac0"
+
+[[tasks]]
+name = "aider/polyglot_rust_macros"
+digest = "sha256:daa81a0a75455d6ac9889eaafb1b65edf3f8f09616be11024333d3f72663eaec"
+
+[[tasks]]
+name = "aider/polyglot_rust_alphametics"
+digest = "sha256:a11a7ce3f3f3248af82527ba7afa403e0466dac0941ee78588122d3e695203fa"
+
+[[tasks]]
+name = "aider/polyglot_rust_doubly-linked-list"
+digest = "sha256:6d3b7b11e7c0dc905cfdce7bf87a926fea05b1a9f01bebd7fd1ca89f053ad199"
+
+[[tasks]]
+name = "aider/polyglot_rust_variable-length-quantity"
+digest = "sha256:d3faf1513ab73ad88a72731d8318f82fc53d4e9cd91ad88b0ce4b8ff290c1434"
+
+[[tasks]]
+name = "aider/polyglot_rust_decimal"
+digest = "sha256:73c9cf50fafae44864f5ecb4f7e104d7eadf91cfe3a9020b3dcb798543de466e"

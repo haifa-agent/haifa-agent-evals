@@ -61,22 +61,29 @@ uv run pytest
 
 构建命令把大体积 JDK 和 Aider runtime 复制到被忽略的 `work/image-cache/` 上下文，不把它们提交到 Git，也不需要容器访问外网。构建完成后会执行无模型冒烟检查，并把实际 image ID、大小、标签和 RepoDigests 写入
 `work/image-cache/agent-infra/image-lock.json`。默认镜像名为
-`localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-v1`。
+`localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-gradle8.7-v3`。镜像还固定
+Gradle 8.7 Wrapper 分发包；构建前必须把官方 zip 放在
+`work/image-cache/gradle/gradle-8.7-bin.zip`（SHA-256
+`544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d`），避免 Java verifier
+在每个临时容器内重复下载。
+构建脚本还要求 `work/image-cache/gradle/caches/modules-2/` 已预热 JUnit 5.10.0、
+AssertJ 3.25.1 及其运行期依赖；只把 Gradle 的依赖制品/元数据缓存复制进镜像，不复制 daemon、
+项目编译缓存、锁文件或运行日志。依赖缓存内容摘要记录在镜像 label 和 image lock 中。
 
 Haifa adapter 会先探测镜像中的 Java 21，再决定是否上传 JDK；固定版 Aider adapter 会先核对精确版本，再决定是否联网安装。因此没有使用该镜像时仍可回退安装，使用后则不会在每个 trial 重复下载这两部分基础设施。
 
 该镜像不能直接替代某一道 Harbor 题目镜像，因为它刻意不包含 `/app` 题目 workspace。若后续把它作为题目 Dockerfile 的基础层或生成 Harbor `docker_image`，必须固定新的环境/数据集摘要；不能把结果混入当前冻结数据集。
 
 `image prepare-tasks` 完成上述转换：它先验证原始冻结数据集，并按 `/app` 文件内容匹配本机已经成功构建的 Harbor 题目镜像；随后从这些镜像复用语言工具链与 workspace，再叠加固定 Agent 基础设施，全程不重新下载语言依赖。生成镜像使用 RepoDigest 写入新的 `task.toml`，最后生成新的任务摘要、数据集摘要和 eval 配置。输出默认位于
-`work/image-cache/task-environments/coding-smoke-v1-agent-infra-v1/`。
+`work/image-cache/task-environments/coding-smoke-v1-agent-infra-v3/`。
 
 运行生成环境时显式指定两项本地证据：
 
 ```powershell
-$root = "work/image-cache/task-environments/coding-smoke-v1-agent-infra-v1"
+$root = "work/image-cache/task-environments/coding-smoke-v1-agent-infra-v3"
 $env:HAIFA_EVAL_TASKS_PATH = "$root/tasks"
-$env:HAIFA_EVAL_DATASET_MANIFEST_PATH = "$root/coding-smoke-v1-agent-infra-v1.dataset.toml"
-uv run evals run --config "$root/coding-smoke-v1-agent-infra-v1.yaml"
+$env:HAIFA_EVAL_DATASET_MANIFEST_PATH = "$root/coding-smoke-v1-agent-infra-v3.dataset.toml"
+uv run evals run --config "$root/coding-smoke-v1-agent-infra-v3.yaml"
 ```
 
 这样 Harbor 会使用每道题的预构建 RepoDigest，跳过 Dockerfile 构建；Haifa 与 Aider adapter 随后分别验证 Java 21 和 Aider 0.86.2 并跳过大体积安装。

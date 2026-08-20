@@ -144,3 +144,27 @@ def test_cpp_verifier_reward_fallback_patch_covers_selected_cpp_tasks() -> None:
         "queen-attack",
     ):
         assert f"polyglot_cpp_{task}/tests/test.sh" in patch
+
+
+def test_recovery_subset_contains_remaining_three_languages() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    config = load_config(
+        repository / "evals" / "coding-polyglot-15-java-python-rust-v1.yaml"
+    )
+    manifest = DatasetManifest.from_toml_file(
+        repository
+        / "evals"
+        / "coding-polyglot-15-java-python-rust-v1.dataset.toml"
+    )
+    languages = [task.split("_", 2)[1] for task in config.tasks]
+
+    assert len(config.tasks) == 15
+    assert {language: languages.count(language) for language in set(languages)} == {
+        "java": 5,
+        "python": 5,
+        "rust": 5,
+    }
+    assert config.dataset == (
+        f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}"
+    )
+    assert {task.name for task in manifest.tasks} == set(config.tasks)

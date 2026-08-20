@@ -1,0 +1,26 @@
+# Recovery subset for the 15 tasks without a valid reward in the first 30-task run.
+# It preserves the task digests from coding-polyglot-30-v1-cpp-verifier-fixed.
+id: coding-polyglot-15-java-python-rust-v1
+dataset: haifa/coding-polyglot-15-java-python-rust-v1@sha256:1e0968b533e64763752be178875afff556ebb76a7725942f855d160651f3f278
+tasks:
+  - aider/polyglot_java_affine-cipher
+  - aider/polyglot_java_bottle-song
+  - aider/polyglot_java_simple-linked-list
+  - aider/polyglot_java_change
+  - aider/polyglot_java_react
+  - aider/polyglot_python_pov
+  - aider/polyglot_python_bowling
+  - aider/polyglot_python_wordy
+  - aider/polyglot_python_book-store
+  - aider/polyglot_python_forth
+  - aider/polyglot_rust_macros
+  - aider/polyglot_rust_alphametics
+  - aider/polyglot_rust_doubly-linked-list
+  - aider/polyglot_rust_variable-length-quantity
+  - aider/polyglot_rust_decimal
+attempts: 1
+timeoutMinutes: 20
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: deepseek-responses-flash

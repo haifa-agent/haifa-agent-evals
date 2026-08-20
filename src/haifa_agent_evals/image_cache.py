@@ -17,8 +17,9 @@ from harbor.publisher.packager import Packager
 
 from haifa_agent_evals.config import EvaluationConfig, load_config
 
-DEFAULT_IMAGE = "localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-v1"
+DEFAULT_IMAGE = "localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-gradle8.7-v3"
 JDK_SHA256 = "f2dc5418092c43003db8f9005c4a286e1c0104fea96ccdd49e8ebd037cac9219"
+GRADLE_SHA256 = "544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d"
 _AIDER_TOOL_PATH = Path("root/.local/share/uv/tools/aider-chat")
 _AIDER_PYTHON_PATH = Path("root/.local/share/uv/python/cpython-3.12.8-linux-x86_64-gnu")
 
@@ -73,6 +74,43 @@ def _default_aider_runtime() -> Path:
         / "agent-infra"
         / "aider-runtime.tar.gz"
     )
+
+
+def _gradle_archive() -> Path:
+    configured = os.environ.get("HAIFA_EVAL_GRADLE_ARCHIVE_PATH")
+    path = (
+        Path(configured)
+        if configured
+        else _repository_root()
+        / "work"
+        / "image-cache"
+        / "gradle"
+        / "gradle-8.7-bin.zip"
+    ).expanduser().resolve()
+    if not path.is_file() or _sha256(path) != GRADLE_SHA256:
+        raise ValueError("Gradle 8.7 archive is missing or does not match its pinned digest")
+    return path
+
+
+def _gradle_dependency_cache() -> Path:
+    path = (
+        _repository_root()
+        / "work"
+        / "image-cache"
+        / "gradle"
+        / "caches"
+        / "modules-2"
+    ).resolve()
+    required_jars = {
+        "byte-buddy-1.14.11.jar",
+        "assertj-core-3.25.1.jar",
+        "junit-jupiter-engine-5.10.0.jar",
+        "junit-platform-engine-1.10.0.jar",
+    }
+    available = {candidate.name for candidate in path.rglob("*.jar")} if path.is_dir() else set()
+    if not required_jars <= available:
+        raise ValueError("Gradle dependency cache is incomplete")
+    return path
 
 
 def _validate_aider_runtime(path: Path) -> Path:
@@ -186,6 +224,11 @@ def _lock_payload(image: str, inspected: dict[str, Any]) -> dict[str, Any]:
             "aiderVersion": "0.86.2",
             "javaVersion": "21.0.8+9",
             "jdkArchiveSha256": JDK_SHA256,
+            "gradleVersion": "8.7",
+            "gradleArchiveSha256": GRADLE_SHA256,
+            "gradleDependencyCacheSha256": labels.get(
+                "io.haifa.evals.gradle-cache-sha256"
+            ),
         },
     }
 
@@ -212,11 +255,19 @@ def _agent_ready_dockerfile(
     source_reference: str,
     infra_reference: str,
     replace_workspace: bool = False,
+    include_gradle: bool = False,
 ) -> str:
     workspace = (
         "RUN find /app -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +\n"
         "COPY workspace/ /app/\n"
         if replace_workspace
+        else ""
+    )
+    gradle = (
+        "COPY --from=haifa_agent_infra /root/.gradle/wrapper /root/.gradle/wrapper\n"
+        "COPY --from=haifa_agent_infra /root/.gradle/caches/modules-2 "
+        "/root/.gradle/caches/modules-2\n"
+        if include_gradle
         else ""
     )
     return (
@@ -231,6 +282,7 @@ def _agent_ready_dockerfile(
         "COPY --from=haifa_agent_infra "
         "/root/.local/share/uv/python/cpython-3.12.8-linux-x86_64-gnu "
         "/root/.local/share/uv/python/cpython-3.12.8-linux-x86_64-gnu\n"
+        f"{gradle}"
         "RUN install -d -m 0755 /root/.local/bin && "
         "ln -sf /root/.local/share/uv/tools/aider-chat/bin/aider "
         "/root/.local/bin/aider && "
@@ -238,7 +290,7 @@ def _agent_ready_dockerfile(
         "> /root/.local/bin/env && chmod 0644 /root/.local/bin/env\n"
         "ENV JAVA_HOME=/opt/haifa/java\n"
         "ENV PATH=/opt/haifa/java/bin:/root/.local/bin:${PATH}\n"
-        'LABEL io.haifa.evals.agent-infra="jammy-jdk21-aider0.86.2-v1"\n'
+        'LABEL io.haifa.evals.agent-infra="jammy-jdk21-aider0.86.2-gradle8.7-v3"\n'
     )
 
 
@@ -433,7 +485,7 @@ def prepare_task_images(
     cli = _container_cli(container_cli)
     infra_inspected = _inspect(cli, infra_image)
     infra_reference = _pinned_reference(infra_image, infra_inspected)
-    generated_id = f"{config.id}-agent-infra-v1"
+    generated_id = f"{config.id}-agent-infra-v3"
     destination = (
         output
         or _repository_root()
@@ -490,6 +542,14 @@ def prepare_task_images(
                 source_reference,
                 infra_reference,
                 replace_workspace=replace_workspace,
+                include_gradle=(
+                    source_task
+                    / "environment"
+                    / "workspace"
+                    / "gradle"
+                    / "wrapper"
+                    / "gradle-wrapper.properties"
+                ).is_file(),
             ),
             encoding="utf-8",
         )
@@ -522,7 +582,7 @@ def prepare_task_images(
         images.append({"task": task_name, "image": image_reference, "digest": task_digest})
 
     source_dataset_name = config.dataset.rsplit("@", 1)[0]
-    dataset_name = f"{source_dataset_name}-agent-infra-v1"
+    dataset_name = f"{source_dataset_name}-agent-infra-v3"
     manifest = DatasetManifest(
         dataset=DatasetInfo(
             name=dataset_name,
@@ -563,6 +623,8 @@ def build_image(
 ) -> Path:
     cli = _container_cli(container_cli)
     archive = _java_archive(java_archive)
+    gradle_archive = _gradle_archive()
+    gradle_cache = _gradle_dependency_cache()
     runtime = _validate_aider_runtime(aider_runtime or _default_aider_runtime())
     repository = _repository_root()
     source = repository / "infra" / "agent-base"
@@ -578,6 +640,18 @@ def build_image(
     cached_archive = context / "temurin-jdk.tar.gz"
     if not cached_archive.is_file() or _sha256(cached_archive) != JDK_SHA256:
         shutil.copy2(archive, cached_archive)
+    cached_gradle = context / "gradle-8.7-bin.zip"
+    if not cached_gradle.is_file() or _sha256(cached_gradle) != GRADLE_SHA256:
+        shutil.copy2(gradle_archive, cached_gradle)
+    cached_gradle_modules = context / "gradle-modules-2"
+    if cached_gradle_modules.exists():
+        shutil.rmtree(cached_gradle_modules)
+    shutil.copytree(
+        gradle_cache,
+        cached_gradle_modules,
+        ignore=shutil.ignore_patterns("*.lock", "gc.properties"),
+    )
+    gradle_cache_hash = _host_tree_hash(cached_gradle_modules)
 
     subprocess.run(  # noqa: S603
         [
@@ -586,6 +660,8 @@ def build_image(
             "--pull=never",
             "--tag",
             image,
+            "--build-arg",
+            f"GRADLE_CACHE_SHA256={gradle_cache_hash}",
             "--file",
             str(context / "Dockerfile"),
             str(context),
@@ -617,6 +693,10 @@ def inspect_image(
             "java -version 2>&1 | grep -q '\"21'; "
             "java --list-modules | grep -q '^jdk.random@'; "
             "test \"$(aider --version)\" = 'aider 0.86.2'; "
+            "test -r /root/.gradle/wrapper/dists/gradle-8.7-bin/"
+            "bhs2wmbdwecv87pi65oeuq5iu/gradle-8.7-bin.zip; "
+            "find /root/.gradle/caches/modules-2 -name 'byte-buddy-1.14.11.jar' "
+            "-type f | grep -q .; "
             "printf 'agent infrastructure image smoke: PASS\\n'"
         )
         subprocess.run(  # noqa: S603

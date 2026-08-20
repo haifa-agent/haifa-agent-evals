@@ -32,6 +32,7 @@ def test_lock_payload_records_image_identity() -> None:
 
     assert payload["id"] == "sha256:image-id"
     assert payload["inputs"]["aiderVersion"] == "0.86.2"
+    assert payload["inputs"]["gradleVersion"] == "8.7"
     assert payload["labels"]["io.haifa.evals.contains-task-data"] == "false"
     assert json.loads(json.dumps(payload))["sizeBytes"] == 123
 
@@ -59,11 +60,14 @@ def test_agent_ready_dockerfile_copies_only_infrastructure() -> None:
     generated = image_cache._agent_ready_dockerfile(
         "localhost/task@sha256:source",
         "localhost/infra@sha256:exact",
+        include_gradle=True,
     )
 
     assert generated.startswith("FROM localhost/infra@sha256:exact AS haifa_agent_infra")
     assert "FROM localhost/task@sha256:source" in generated
     assert "/opt/haifa/java" in generated
+    assert "/root/.gradle/wrapper" in generated
+    assert "/root/.gradle/caches/modules-2" in generated
     assert "haifa-agent.jar" not in generated
 
 
@@ -76,6 +80,7 @@ def test_agent_ready_dockerfile_can_replace_workspace_on_language_base() -> None
 
     assert "find /app -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +" in generated
     assert "COPY workspace/ /app/" in generated
+    assert "/root/.gradle/wrapper" not in generated
 
 
 def test_task_prebuilt_image_is_digest_pinned() -> None:
