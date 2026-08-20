@@ -64,28 +64,37 @@ def test_install_uploads_and_verifies_immutable_inputs(tmp_path: Path) -> None:
     assert agent.config_digest in all_commands
     assert "--help" in all_commands
     assert "sha256sum -c" in all_commands
+    assert "install -d -m 0777 /tmp/haifa-transcripts" in all_commands
 
 
-def test_install_can_upload_one_pinned_jre_archive(
+def test_install_can_upload_one_pinned_java_archive(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    jre = tmp_path / "jre.tar.gz"
-    jre.write_bytes(b"pinned jre")
-    monkeypatch.setattr(haifa_agent_module, "_JRE_SHA256", haifa_agent_module._sha256(jre))
+    java_archive = tmp_path / "jdk.tar.gz"
+    java_archive.write_bytes(b"pinned jdk")
+    monkeypatch.setattr(
+        haifa_agent_module,
+        "_JAVA_ARCHIVE_SHA256",
+        haifa_agent_module._sha256(java_archive),
+    )
     jar = tmp_path / "agent.jar"
     config = tmp_path / "config.yaml"
     jar.write_bytes(b"fake jar")
     config.write_text("approval: {mode: auto}\n", encoding="utf-8")
     agent = HaifaCodingAgent(
-        logs_dir=tmp_path / "logs", jar_path=jar, config_path=config, jre_path=jre
+        logs_dir=tmp_path / "logs",
+        jar_path=jar,
+        config_path=config,
+        java_archive_path=java_archive,
     )
     environment = _FakeEnvironment()
 
     asyncio.run(agent.install(environment))  # type: ignore[arg-type]
 
-    assert environment.uploads[0] == (jre, "/tmp/haifa-jre.tar.gz")
+    assert environment.uploads[0] == (java_archive, "/tmp/haifa-java.tar.gz")
     install_command = environment.commands[1][0]
     assert "curl -L" not in install_command
+    assert "jdk.random" in install_command
 
 
 @pytest.mark.parametrize("exit_code", [0, 1, 2])

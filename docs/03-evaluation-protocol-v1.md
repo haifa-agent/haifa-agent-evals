@@ -9,6 +9,7 @@
 - 每个 Attempt 使用全新 Harbor Container 和 Workspace；
 - 时限统一为 20 分钟；
 - 可见 Task、测试和网络条件一致；
+- Task 说明中的 URL 不作为外部上下文来源；Aider 禁止 Playwright 抓取，与禁用 Web 的 Haifa 对齐；
 - Candidate、模型、JAR、Dataset、Verifier 和 Harbor 使用精确版本；
 - 不在 Attempt 中人工审批、补充 Prompt 或修复环境；
 - 运行后不更换低分 Task。

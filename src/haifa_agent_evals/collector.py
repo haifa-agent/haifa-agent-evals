@@ -11,6 +11,8 @@ from typing import Any
 CSV_FIELDS = (
     "eval_id",
     "candidate",
+    "model",
+    "agent_version",
     "task_id",
     "language",
     "attempt",
@@ -27,6 +29,8 @@ CSV_FIELDS = (
 class Result:
     eval_id: str
     candidate: str
+    model: str
+    agent_version: str
     task_id: str
     language: str
     attempt: int
@@ -41,6 +45,8 @@ class Result:
         return {
             "eval_id": self.eval_id,
             "candidate": self.candidate,
+            "model": self.model,
+            "agent_version": self.agent_version,
             "task_id": self.task_id,
             "language": self.language,
             "attempt": self.attempt,
@@ -106,8 +112,32 @@ def _duration(raw: dict[str, Any]) -> float | None:
 
 
 def _language(task_id: str) -> str:
-    match = re.search(r"polyglot_(cpp|go|java|javascript|python|rust)_", task_id)
+    match = re.search(
+        r"(?:polyglot_|coding-smoke-)(cpp|go|java|javascript|python|rust)[_-]",
+        task_id,
+    )
     return match.group(1) if match else "unknown"
+
+
+def _agent_version(raw: dict[str, Any], trial_dir: Path, candidate: str) -> str:
+    reported = str(_first(_nested(raw, "agent_info", "version"), "")).strip()
+    safe_version = r"(?:sha256:[0-9a-f]{64}|v?\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?)"
+    if re.fullmatch(safe_version, reported):
+        return reported.removeprefix("v")
+    if candidate == "aider":
+        aider_log = trial_dir / "agent" / "aider.txt"
+        if aider_log.is_file():
+            with aider_log.open(encoding="utf-8", errors="replace") as stream:
+                for index, line in enumerate(stream):
+                    if index >= 32:
+                        break
+                    match = re.fullmatch(
+                        r"Aider v?(\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?)\s*",
+                        line,
+                    )
+                    if match:
+                        return match.group(1)
+    return "unavailable"
 
 
 def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
@@ -130,6 +160,14 @@ def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
             "unknown",
         )
     )
+    model = str(
+        _first(
+            _nested(config, "agent", "model_name"),
+            _nested(raw, "agent_info", "model_info", "name"),
+            "unknown",
+        )
+    )
+    agent_version = _agent_version(raw, trial_dir, candidate)
     duration = _duration(raw)
     exit_code = _int_or_none(
         _first(raw.get("exit_code"), _nested(raw, "agent_result", "metadata", "exit_code"))
@@ -139,6 +177,8 @@ def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
     return Result(
         eval_id=eval_id,
         candidate=candidate,
+        model=model,
+        agent_version=agent_version,
         task_id=task_id,
         language=language,
         attempt=attempt,

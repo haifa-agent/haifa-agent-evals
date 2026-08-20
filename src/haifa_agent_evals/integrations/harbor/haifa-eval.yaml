@@ -65,8 +65,8 @@ runtime:
 
 persistence:
   mode: SQLITE_WITH_JSONL
-  databasePath: /logs/agent/haifa-runtime.db
-  transcriptRoot: /logs/agent/transcripts
+  databasePath: /tmp/haifa-runtime.db
+  transcriptRoot: /tmp/haifa-transcripts
   protection: NONE
   busyTimeoutMillis: 5000
   maximumPayloadBytes: 1048576

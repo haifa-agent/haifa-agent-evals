@@ -34,8 +34,8 @@ integrations.harbor.haifa_agent:HaifaCodingAgent
 ## 3. 安装
 
 - Container 必须是 Linux；
-- Container 已有 Java 21 时直接复用；否则使用冻结的 Temurin 21.0.8+9 JRE archive；
-- JRE archive 可由宿主缓存上传，未提供缓存时才从 Adoptium 下载，并校验固定 SHA-256；
+- Container 已有 Java 21 且包含 `jdk.random` 时直接复用；否则使用冻结的 Temurin 21.0.8+9 JDK archive；
+- JDK archive 可由宿主缓存上传，未提供缓存时才从 Adoptium 下载，并校验固定 SHA-256；
 - JAR 放在 `/opt/haifa/haifa-agent.jar`；
 - 配置放在 `/opt/haifa/haifa-eval.yaml`；
 - JAR 和配置对 Agent 用户只读；
@@ -65,7 +65,8 @@ java -jar /opt/haifa/haifa-agent.jar
 - stdin 关闭；
 - 不追加 Haifa 专用解题提示；
 - 不使用 Terminal、Resume 或 `--verbose`；
-- 每个 Trial 使用独立 Trace 和 SQLite；
+- 每个 Trial 使用独立 Trace 和 SQLite；SQLite/Transcript 位于 Container 本地临时文件系统，避免依赖
+  宿主 bind mount 的文件锁语义，Trace 仍写入 `/logs/agent/`；
 - Candidate 非零退出不能阻止 Harbor Verifier。
 
 ## 5. Eval 配置
@@ -77,7 +78,8 @@ java -jar /opt/haifa/haifa-agent.jar
 - `approval.mode: auto`；
 - `execution.provider: host-guarded`，外层 Container 是安全边界；
 - 固定 50 Iterations、32 Tool Calls 和命令输出上限；
-- 持久化路径位于本 Trial 的 `/logs/agent/`。
+- SQLite 与 Transcript 位于本 Trial 的 Container 本地 `/tmp`，不作为报告产物；安全 Trace 位于
+  `/logs/agent/`。
 
 ## 6. 输出
 

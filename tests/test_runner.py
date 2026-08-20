@@ -166,3 +166,4 @@ def test_checked_in_aider_route_survives_harbor_provider_split(tmp_path: Path) -
 
     aider = next(agent for agent in job_config["agents"] if agent.get("name") == "aider")
     assert aider["model_name"] == "openai/openai/deepseek-v4-flash"
+    assert aider["env"]["AIDER_DISABLE_PLAYWRIGHT"] == "true"

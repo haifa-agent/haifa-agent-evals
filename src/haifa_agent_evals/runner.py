@@ -27,7 +27,10 @@ def _agent_config(candidate: Candidate, timeout_seconds: int) -> dict[str, objec
     if candidate.id == "haifa":
         result["env"] = {"DEEPSEEK_API_KEY": "${DEEPSEEK_API_KEY}"}
     elif candidate.id == "aider":
-        result["env"] = {"AIDER_OPENAI_API_BASE": "https://api.deepseek.com"}
+        result["env"] = {
+            "AIDER_OPENAI_API_BASE": "https://api.deepseek.com",
+            "AIDER_DISABLE_PLAYWRIGHT": "true",
+        }
     return result
 
 
