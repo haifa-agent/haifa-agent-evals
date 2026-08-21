@@ -32,6 +32,21 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
     invalid = sorted({row["status"] for row in rows} - {"PASS", "FAIL", "ERROR"})
     if invalid:
         raise ValueError(f"invalid result statuses: {', '.join(invalid)}")
+    diagnostic_defaults = {
+        "trial_validity": "",
+        "agent_clean_exit": "unknown",
+        "workspace_changed": "unknown",
+        "verifier_executed": "unknown",
+        "failure_stage": "",
+        "failure_code": "",
+        "model_attempts": "",
+        "tool_outcome_unknown": "unknown",
+    }
+    for row in rows:
+        for field, default in diagnostic_defaults.items():
+            row.setdefault(field, default)
+        if not row["trial_validity"]:
+            row["trial_validity"] = "VALID" if row["status"] != "ERROR" else "INCOMPLETE"
     return rows
 
 
@@ -87,22 +102,45 @@ def report(results_path: Path, output: Path | None = None) -> Path:
         "## Candidate summary",
         "",
         "| Candidate | Model route | Agent version | Planned | Valid | Passed | "
-        "Pass rate | Result errors | Agent exceptions | Median duration |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "Pass rate | Invalid | Clean completion | Agent exceptions | Median duration |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for candidate in sorted(by_candidate):
         candidate_rows = by_candidate[candidate]
-        valid = [row for row in candidate_rows if row["status"] != "ERROR"]
+        valid = [row for row in candidate_rows if row["trial_validity"] == "VALID"]
         passed = sum(row["status"] == "PASS" for row in valid)
         rate = "unavailable" if not valid else f"{passed / len(valid):.1%}"
-        errors = sum(row["status"] == "ERROR" for row in candidate_rows)
+        invalid = sum(row["trial_validity"] != "VALID" for row in candidate_rows)
+        clean_known = [
+            row for row in candidate_rows if row["agent_clean_exit"] in {"true", "false"}
+        ]
+        clean = sum(row["agent_clean_exit"] == "true" for row in clean_known)
+        clean_summary = "unavailable" if not clean_known else f"{clean}/{len(clean_known)}"
         agent_exceptions = sum(bool(row["error_type"]) for row in candidate_rows)
         lines.append(
             f"| {candidate} | {_single_value(candidate_rows, 'model')} | "
             f"{_single_value(candidate_rows, 'agent_version')} | {len(candidate_rows)} | "
-            f"{len(valid)} | {passed} | {rate} | {errors} | {agent_exceptions} | "
-            f"{_duration(candidate_rows)} |"
+            f"{len(valid)} | {passed} | {rate} | {invalid} | {clean_summary} | "
+            f"{agent_exceptions} | {_duration(candidate_rows)} |"
         )
+
+    validity_counts: dict[str, int] = defaultdict(int)
+    for row in rows:
+        validity_counts[row["trial_validity"]] += 1
+    lines.extend(
+        [
+            "",
+            "## Data quality",
+            "",
+            "Official PASS/FAIL/ERROR is preserved from Harbor reward. Trial validity and "
+            "clean completion are diagnostic dimensions and never rewrite that score.",
+            "",
+            "| Trial validity | Count |",
+            "| --- | ---: |",
+        ]
+    )
+    for validity in sorted(validity_counts):
+        lines.append(f"| {validity} | {validity_counts[validity]} |")
 
     candidates = sorted(by_candidate)
     tasks = sorted({row["task_id"] for row in rows})
@@ -126,18 +164,19 @@ def report(results_path: Path, output: Path | None = None) -> Path:
             "",
             "## Failures and errors",
             "",
-            "| Candidate | Task | Status | Exit code | Reason |",
-            "| --- | --- | --- | ---: | --- |",
+            "| Candidate | Task | Status | Validity | Stage | Exit code | Reason |",
+            "| --- | --- | --- | --- | --- | ---: | --- |",
         ]
     )
     if failures:
         for row in failures:
             lines.append(
                 f"| {row['candidate']} | {row['task_id']} | {row['status']} | "
+                f"{row['trial_validity']} | {row['failure_stage'] or '-'} | "
                 f"{row['exit_code'] or '-'} | {_failure_reason(row)} |"
             )
     else:
-        lines.append("| - | - | - | - | - |")
+        lines.append("| - | - | - | - | - | - | - |")
 
     agent_exceptions = [row for row in rows if row["error_type"]]
     lines.extend(

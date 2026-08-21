@@ -75,6 +75,10 @@ def test_collect_and_report_keep_error_out_of_valid_denominator(tmp_path: Path) 
     assert rows[0]["trial_path"] == "trial-1"
     assert rows[0]["model"] == "provider/model"
     assert rows[0]["agent_version"] == "1.2.3"
+    assert rows[0]["trial_validity"] == "VALID"
+    assert rows[0]["agent_clean_exit"] == "true"
+    assert rows[2]["trial_validity"] == "INVALID_INFRA"
+    assert rows[2]["failure_stage"] == "incomplete"
 
     comparison = report(output)
     text = comparison.read_text(encoding="utf-8")
@@ -84,18 +88,24 @@ def test_collect_and_report_keep_error_out_of_valid_denominator(tmp_path: Path) 
     assert "- Model cost: `unavailable`" in text
     assert "complete candidate systems" in text
     assert (
-        "| haifa | provider/model | 1.2.3 | 2 | 2 | 1 | 50.0% | 0 | 0 | 15.00s |"
+        "| haifa | provider/model | 1.2.3 | 2 | 2 | 1 | 50.0% | 0 | 2/2 | 0 | 15.00s |"
         in text
     )
     assert (
-        "| aider | provider/model | 1.2.3 | 1 | 0 | 0 | unavailable | 1 | 1 | "
+        "| aider | provider/model | 1.2.3 | 1 | 0 | 0 | unavailable | 1 | 0/1 | 1 | "
         "30.00s |"
         in text
     )
+    assert "## Data quality" in text
+    assert "| INVALID_INFRA | 1 |" in text
+    assert "| VALID | 2 |" in text
     assert "Verifier reward 0.0" in text
     assert "Verifier did not return a trusted reward" not in text
     assert "## Agent exceptions" in text
-    assert "| aider | task-a | ERROR | 0 | EnvironmentError |" in text
+    assert (
+        "| aider | task-a | ERROR | INVALID_INFRA | incomplete | 0 | EnvironmentError |"
+        in text
+    )
     assert "## Manual review and test focus" in text
     assert "both candidates were observed running as root" in text
     assert "ignored raw logs" in text
@@ -119,7 +129,10 @@ def test_report_shows_exception_even_when_verifier_passes(tmp_path: Path) -> Non
 
     text = report(output).read_text(encoding="utf-8")
 
-    assert "| haifa | provider/model | 1.2.3 | 1 | 1 | 1 | 100.0% | 0 | 1 | " in text
+    assert (
+        "| haifa | provider/model | 1.2.3 | 1 | 1 | 1 | 100.0% | 0 | 0/1 | 1 | "
+        in text
+    )
     assert "| haifa | task-a | PASS | 0 | NonZeroAgentExitCodeError |" in text
 
 

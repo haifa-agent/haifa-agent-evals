@@ -17,6 +17,17 @@ CSV_FIELDS = (
     "language",
     "attempt",
     "status",
+    "trial_validity",
+    "agent_clean_exit",
+    "workspace_changed",
+    "verifier_executed",
+    "verifier_selected",
+    "verifier_discovered",
+    "verifier_ignored",
+    "failure_stage",
+    "failure_code",
+    "model_attempts",
+    "tool_outcome_unknown",
     "reward",
     "duration_seconds",
     "exit_code",
@@ -35,11 +46,26 @@ class Result:
     language: str
     attempt: int
     status: str
+    trial_validity: str
+    agent_clean_exit: bool | None
+    workspace_changed: bool | None
+    verifier_executed: bool
+    verifier_selected: int | None
+    verifier_discovered: int | None
+    verifier_ignored: int | None
+    failure_stage: str
+    failure_code: str
+    model_attempts: int | None
+    tool_outcome_unknown: bool | None
     reward: float | None
     duration_seconds: float | None
     exit_code: int | None
     error_type: str
     trial_path: str
+
+    @staticmethod
+    def _boolean(value: bool | None) -> str:
+        return "unknown" if value is None else str(value).lower()
 
     def as_row(self) -> dict[str, str | int | float]:
         return {
@@ -51,6 +77,21 @@ class Result:
             "language": self.language,
             "attempt": self.attempt,
             "status": self.status,
+            "trial_validity": self.trial_validity,
+            "agent_clean_exit": self._boolean(self.agent_clean_exit),
+            "workspace_changed": self._boolean(self.workspace_changed),
+            "verifier_executed": self._boolean(self.verifier_executed),
+            "verifier_selected": (
+                "" if self.verifier_selected is None else self.verifier_selected
+            ),
+            "verifier_discovered": (
+                "" if self.verifier_discovered is None else self.verifier_discovered
+            ),
+            "verifier_ignored": "" if self.verifier_ignored is None else self.verifier_ignored,
+            "failure_stage": self.failure_stage,
+            "failure_code": self.failure_code,
+            "model_attempts": "" if self.model_attempts is None else self.model_attempts,
+            "tool_outcome_unknown": self._boolean(self.tool_outcome_unknown),
             "reward": "" if self.reward is None else self.reward,
             "duration_seconds": "" if self.duration_seconds is None else self.duration_seconds,
             "exit_code": "" if self.exit_code is None else self.exit_code,
@@ -140,6 +181,40 @@ def _agent_version(raw: dict[str, Any], trial_dir: Path, candidate: str) -> str:
     return "unavailable"
 
 
+def _verifier_executed(raw: dict[str, Any]) -> bool:
+    return bool(raw.get("verifier_result") or _nested(raw, "verifier", "started_at"))
+
+
+def _failure_stage(raw: dict[str, Any], reward: float | None, error_type: str) -> str:
+    if not error_type:
+        return "" if reward is not None else "incomplete"
+    if reward is not None:
+        return "agent"
+    if _nested(raw, "verifier", "started_at"):
+        return "verifier"
+    if _nested(raw, "agent_execution", "started_at"):
+        return "agent"
+    if _nested(raw, "agent_setup", "started_at"):
+        return "agent_setup"
+    if _nested(raw, "environment_setup", "started_at"):
+        return "environment"
+    return "incomplete"
+
+
+def _trial_validity(reward: float | None, error_type: str, failure_stage: str) -> str:
+    if reward is not None:
+        return "VALID"
+    lowered = error_type.lower()
+    if failure_stage == "verifier" or "verifier" in lowered or "rewardfile" in lowered:
+        return "INVALID_DATASET"
+    infrastructure_markers = ("environment", "container", "docker", "setup")
+    if failure_stage in {"environment", "agent_setup"} or any(
+        marker in lowered for marker in infrastructure_markers
+    ):
+        return "INVALID_INFRA"
+    return "INCOMPLETE"
+
+
 def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
     config = _read_json(trial_dir / "config.json")
     raw = _read_json(trial_dir / "result.json")
@@ -172,6 +247,12 @@ def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
     exit_code = _int_or_none(
         _first(raw.get("exit_code"), _nested(raw, "agent_result", "metadata", "exit_code"))
     )
+    verifier_executed = _verifier_executed(raw)
+    failure_stage = _failure_stage(raw, reward, error_type)
+    trial_validity = _trial_validity(reward, error_type, failure_stage)
+    agent_clean_exit = None
+    if exit_code is not None:
+        agent_clean_exit = exit_code == 0 and not error_type
     language = _language(task_id)
     attempt = 1
     return Result(
@@ -183,6 +264,17 @@ def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
         language=language,
         attempt=attempt,
         status=status,
+        trial_validity=trial_validity,
+        agent_clean_exit=agent_clean_exit,
+        workspace_changed=None,
+        verifier_executed=verifier_executed,
+        verifier_selected=None,
+        verifier_discovered=None,
+        verifier_ignored=None,
+        failure_stage=failure_stage,
+        failure_code=error_type,
+        model_attempts=None,
+        tool_outcome_unknown=None,
         reward=reward,
         duration_seconds=duration,
         exit_code=exit_code,

@@ -38,6 +38,11 @@
 
 ```bash
 uv sync --frozen
+uv run evals admit --config evals/coding-smoke-v1.yaml \
+  --tasks-path work/derived-tasks \
+  --oracle-job-dir work/calibration/oracle \
+  --nop-job-dir work/calibration/nop \
+  --output work/admissions/coding-smoke-v1.json
 uv run evals run --config evals/coding-smoke-v1.yaml
 uv run evals collect --job-dir work/coding-smoke-v1 --output reports/coding-smoke-v1/results.csv
 uv run evals report --results reports/coding-smoke-v1/results.csv
@@ -47,6 +52,14 @@ uv run evals image check
 uv run evals image prepare-tasks --config evals/coding-smoke-v1.yaml --tasks-path work/derived-tasks
 uv run pytest
 ```
+
+`admit` 在真实模型调用前核对冻结 Dataset/Task digest，并要求每个 Task 都有唯一的 Oracle PASS
+和 NOP 可信 FAIL。准入 JSON 同时保留当前无法自动取得的 Verifier 测试数量，以及题面契约、测试全集和
+离线依赖三项人工复核重点；它不修改 Harbor Reward，也不替代 Harbor Verifier。
+
+`results.csv` 的 `status` 始终是 Harbor 官方 PASS/FAIL/ERROR；`trial_validity`、
+`agent_clean_exit`、`failure_stage` 等字段是正交诊断维度，只解释运行是否有效及失败发生在哪一层，
+不得反向改写正式成绩。
 
 ## Agent 基础设施镜像
 
