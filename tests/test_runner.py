@@ -1,4 +1,5 @@
 import json
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -38,9 +39,16 @@ def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:
     assert len(job_config["agents"]) == 2
     assert job_config["datasets"][0]["ref"] == "v1"
 
-    plan = run(config, tmp_path, plan_only=True)
+    work_dir = tmp_path / "run-1"
+    plan = run(config, work_dir, plan_only=True)
     assert plan.is_file()
-    assert (tmp_path.parent / "smoke-harbor-job.yaml").is_file()
+    assert (tmp_path / "run-1-harbor-job.yaml").is_file()
+    manifest_path = tmp_path / "run-1-run-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["runId"] == "run-1"
+    assert manifest["runStatus"] == "PLANNED"
+    assert len(manifest["plannedTrials"]) == 4
+    assert str(tmp_path) not in manifest_path.read_text(encoding="utf-8")
     assert not any(path.name == "result.json" for path in tmp_path.rglob("result.json"))
 
 
@@ -60,8 +68,8 @@ def test_uses_complete_local_task_cache(tmp_path: Path, monkeypatch) -> None:
     plan = run(config, tmp_path / "job", plan_only=True)
 
     plan_data = json.loads(plan.read_text(encoding="utf-8"))
-    assert plan_data["datasetSource"] == str(tasks.resolve())
-    job_config = (tmp_path / "smoke-harbor-job.yaml").read_text(encoding="utf-8")
+    assert plan_data["datasetSource"] == "local"
+    job_config = (tmp_path / "job-harbor-job.yaml").read_text(encoding="utf-8")
     assert "path:" in job_config
     assert "task_names:" in job_config
     assert "- task-a" in job_config
@@ -104,9 +112,9 @@ def test_adds_one_explicit_docker_compose_overlay(tmp_path: Path, monkeypatch) -
     plan = run(config, tmp_path / "job", plan_only=True)
 
     plan_data = json.loads(plan.read_text(encoding="utf-8"))
-    assert plan_data["extraDockerCompose"] == str(overlay.resolve())
+    assert plan_data["extraDockerCompose"] is True
     job_config = yaml.safe_load(
-        (tmp_path / "smoke-harbor-job.yaml").read_text(encoding="utf-8")
+        (tmp_path / "job-harbor-job.yaml").read_text(encoding="utf-8")
     )
     assert job_config["environment"]["extra_docker_compose"] == [str(overlay.resolve())]
 
@@ -208,3 +216,68 @@ def test_checked_in_aider_route_survives_harbor_provider_split(tmp_path: Path) -
     )
     assert aider["model_name"] == "openai/openai/deepseek-v4-flash"
     assert aider["env"]["AIDER_DISABLE_PLAYWRIGHT"] == "true"
+
+
+def test_run_refuses_to_reuse_a_run_directory(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("aider", "aider", "provider/model"),),
+    )
+    work_dir = tmp_path / "existing-run"
+    work_dir.mkdir()
+
+    with pytest.raises(ValueError, match="run directory already exists"):
+        run(config, work_dir, plan_only=True)
+
+
+def test_run_manifest_fingerprints_preflight_evidence_and_explicit_jar(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "provider/model"),),
+    )
+    jar = tmp_path / "agent.jar"
+    admission = tmp_path / "admission.json"
+    preflight = tmp_path / "preflight.json"
+    jar.write_bytes(b"jar")
+    admission.write_bytes(b"admission")
+    preflight.write_bytes(b"preflight")
+
+    run(
+        config,
+        tmp_path / "run-1",
+        plan_only=True,
+        jar_path=jar,
+        admission_path=admission,
+        preflight_path=preflight,
+    )
+
+    manifest = json.loads((tmp_path / "run-1-run-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["haifaJarSha256"] == sha256(b"jar").hexdigest()
+    assert manifest["admissionSha256"] == sha256(b"admission").hexdigest()
+    assert manifest["preflightSha256"] == sha256(b"preflight").hexdigest()
+
+
+def test_failed_run_updates_manifest_terminal_status(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "provider/model"),),
+    )
+
+    with pytest.raises(ValueError, match="readable JAR"):
+        run(config, tmp_path / "run-1", jar_path=tmp_path / "missing.jar")
+
+    manifest = json.loads((tmp_path / "run-1-run-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["runStatus"] == "HARBOR_FAILED"
+    assert manifest["finishedAt"]

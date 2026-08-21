@@ -49,17 +49,31 @@ def validate_local_dataset(
     return manifest
 
 
-def local_tasks_path(config: EvaluationConfig, work_dir: Path) -> Path | None:
+def configured_tasks_path(config: EvaluationConfig, explicit_path: Path | None = None) -> Path:
+    if explicit_path is not None:
+        return explicit_path
     configured = os.environ.get("HAIFA_EVAL_TASKS_PATH")
+    if configured:
+        return Path(configured)
     manifest_path = dataset_manifest_path(config)
     default_directory = "derived-tasks" if manifest_path.is_file() else "selected-tasks"
-    candidate = Path(configured) if configured else work_dir.parent / default_directory
+    return repository_root() / "work" / default_directory
+
+
+def local_tasks_path(
+    config: EvaluationConfig,
+    work_dir: Path,
+    explicit_path: Path | None = None,
+) -> Path | None:
+    explicitly_configured = explicit_path is not None or "HAIFA_EVAL_TASKS_PATH" in os.environ
+    candidate = configured_tasks_path(config, explicit_path)
+    manifest_path = dataset_manifest_path(config)
     expected_directories = {task.rsplit("/", 1)[-1] for task in config.tasks}
     if candidate.is_dir() and all((candidate / task).is_dir() for task in expected_directories):
         if manifest_path.is_file():
             validate_local_dataset(config, candidate, manifest_path)
         return candidate
-    if configured:
+    if explicitly_configured:
         raise ValueError("HAIFA_EVAL_TASKS_PATH does not contain every configured task")
     if manifest_path.is_file():
         raise ValueError("pinned local dataset is missing; prepare work/derived-tasks first")

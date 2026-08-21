@@ -4,12 +4,23 @@ import json
 import os
 import shutil
 import subprocess
+import sys
+import uuid
+from dataclasses import asdict
+from datetime import UTC, datetime
+from hashlib import sha256
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import yaml
+from harbor.models.dataset.manifest import DatasetManifest
 
 from haifa_agent_evals.config import Candidate, EvaluationConfig
-from haifa_agent_evals.dataset import local_tasks_path, validate_local_dataset
+from haifa_agent_evals.dataset import (
+    dataset_manifest_path,
+    local_tasks_path,
+    validate_local_dataset,
+)
 
 _local_tasks_path = local_tasks_path
 _validate_local_dataset = validate_local_dataset
@@ -75,8 +86,38 @@ def build_job_config(
 
 
 def build_commands(config: EvaluationConfig, work_dir: Path) -> list[list[str]]:
-    job_config_path = work_dir.parent / f"{config.id}-harbor-job.yaml"
+    job_config_path = work_dir.parent / f"{work_dir.name}-harbor-job.yaml"
     return [["harbor", "run", "--config", str(job_config_path), "--yes"]]
+
+
+def new_run_id() -> str:
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return f"{timestamp}-{uuid.uuid4().hex[:8]}"
+
+
+def _file_sha256(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    digest = sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _harbor_version() -> str:
+    try:
+        return version("harbor")
+    except PackageNotFoundError:
+        return "unavailable"
+
+
+def _task_digests(config: EvaluationConfig) -> dict[str, str]:
+    manifest_path = dataset_manifest_path(config)
+    if not manifest_path.is_file():
+        return {}
+    manifest = DatasetManifest.from_toml_file(manifest_path)
+    return {task.name: task.digest for task in manifest.tasks if task.name in config.tasks}
 
 
 def _child_environment(work_dir: Path) -> dict[str, str]:
@@ -120,11 +161,25 @@ def _extra_docker_compose() -> Path | None:
     return path
 
 
-def _write_inputs(config: EvaluationConfig, work_dir: Path) -> Path:
+def _write_inputs(
+    config: EvaluationConfig,
+    work_dir: Path,
+    tasks_path: Path | None = None,
+    jar_path: Path | None = None,
+    admission_path: Path | None = None,
+    preflight_path: Path | None = None,
+) -> tuple[Path, Path]:
+    if work_dir.exists():
+        raise ValueError("run directory already exists; choose a new run id")
     work_dir.parent.mkdir(parents=True, exist_ok=True)
-    tasks_path = _local_tasks_path(config, work_dir)
+    tasks_path = _local_tasks_path(config, work_dir, tasks_path)
     extra_docker_compose = _extra_docker_compose()
-    job_config_path = work_dir.parent / f"{config.id}-harbor-job.yaml"
+    job_config_path = work_dir.parent / f"{work_dir.name}-harbor-job.yaml"
+    plan_path = work_dir.parent / f"{work_dir.name}-eval-plan.json"
+    manifest_path = work_dir.parent / f"{work_dir.name}-run-manifest.json"
+    control_paths = (job_config_path, plan_path, manifest_path)
+    if any(path.exists() for path in control_paths):
+        raise ValueError("run control file already exists; choose a new run id")
     job_config_path.write_text(
         yaml.safe_dump(
             build_job_config(config, work_dir, tasks_path, extra_docker_compose),
@@ -133,35 +188,104 @@ def _write_inputs(config: EvaluationConfig, work_dir: Path) -> Path:
         encoding="utf-8",
     )
     commands = build_commands(config, work_dir)
-    plan_path = work_dir.parent / f"{config.id}-eval-plan.json"
     plan_path.write_text(
         json.dumps(
             {
                 "eval_id": config.id,
                 "dataset": config.dataset,
-                "datasetSource": str(tasks_path.resolve()) if tasks_path else "registry",
-                "extraDockerCompose": (
-                    str(extra_docker_compose.resolve()) if extra_docker_compose else None
-                ),
+                "runId": work_dir.name,
+                "datasetSource": "local" if tasks_path else "registry",
+                "extraDockerCompose": extra_docker_compose is not None,
                 "tasks": list(config.tasks),
                 "attempts": config.attempts,
-                "commands": commands,
+                "commands": [
+                    [*command[:-2], job_config_path.name, command[-1]] for command in commands
+                ],
             },
             indent=2,
         )
         + "\n",
         encoding="utf-8",
     )
-    return plan_path
+    resolved_jar = jar_path or Path(
+        os.environ.get("HAIFA_EVAL_JAR_PATH", str(_default_haifa_jar()))
+    )
+    config_payload = json.dumps(asdict(config), sort_keys=True, separators=(",", ":"))
+    manifest = {
+        "schemaVersion": 1,
+        "runId": work_dir.name,
+        "evalId": config.id,
+        "configSha256": sha256(config_payload.encode()).hexdigest(),
+        "dataset": config.dataset,
+        "datasetSource": "local" if tasks_path else "registry",
+        "tasks": list(config.tasks),
+        "taskDigests": _task_digests(config),
+        "candidates": [asdict(candidate) for candidate in config.candidates],
+        "attempts": config.attempts,
+        "timeoutMinutes": config.timeout_minutes,
+        "plannedTrials": [
+            {"candidate": candidate.id, "taskId": task, "attempt": attempt}
+            for candidate in config.candidates
+            for task in config.tasks
+            for attempt in range(1, config.attempts + 1)
+        ],
+        "harborVersion": _harbor_version(),
+        "pythonVersion": (
+            f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        ),
+        "haifaJarSha256": (
+            _file_sha256(resolved_jar)
+            if any(candidate.id == "haifa" for candidate in config.candidates)
+            else None
+        ),
+        "admissionSha256": _file_sha256(admission_path) if admission_path else None,
+        "preflightSha256": _file_sha256(preflight_path) if preflight_path else None,
+        "startedAt": datetime.now(UTC).isoformat(),
+        "finishedAt": None,
+        "runStatus": "PLANNED",
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return plan_path, manifest_path
 
 
-def run(config: EvaluationConfig, work_dir: Path, plan_only: bool = False) -> Path:
-    plan_path = _write_inputs(config, work_dir)
+def _finish_manifest(manifest_path: Path, status: str) -> None:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["finishedAt"] = datetime.now(UTC).isoformat()
+    manifest["runStatus"] = status
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+
+def run(
+    config: EvaluationConfig,
+    work_dir: Path,
+    plan_only: bool = False,
+    tasks_path: Path | None = None,
+    jar_path: Path | None = None,
+    admission_path: Path | None = None,
+    preflight_path: Path | None = None,
+) -> Path:
+    plan_path, manifest_path = _write_inputs(
+        config,
+        work_dir,
+        tasks_path,
+        jar_path,
+        admission_path,
+        preflight_path,
+    )
     if not plan_only:
-        environment = _child_environment(work_dir)
-        environment.setdefault("HAIFA_EVAL_JAR_PATH", str(_default_haifa_jar()))
-        if not Path(environment["HAIFA_EVAL_JAR_PATH"]).is_file():
-            raise ValueError("HAIFA_EVAL_JAR_PATH does not point to a readable JAR")
-        for command in build_commands(config, work_dir):
-            subprocess.run(command, check=True, env=environment)  # noqa: S603
+        try:
+            environment = _child_environment(work_dir)
+            if any(candidate.id == "haifa" for candidate in config.candidates):
+                if jar_path is not None:
+                    environment["HAIFA_EVAL_JAR_PATH"] = str(jar_path)
+                else:
+                    environment.setdefault("HAIFA_EVAL_JAR_PATH", str(_default_haifa_jar()))
+                if not Path(environment["HAIFA_EVAL_JAR_PATH"]).is_file():
+                    raise ValueError("HAIFA_EVAL_JAR_PATH does not point to a readable JAR")
+            for command in build_commands(config, work_dir):
+                subprocess.run(command, check=True, env=environment)  # noqa: S603
+        except Exception:
+            _finish_manifest(manifest_path, "HARBOR_FAILED")
+            raise
+        _finish_manifest(manifest_path, "HARBOR_FINISHED")
     return plan_path

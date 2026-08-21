@@ -3,10 +3,13 @@ from __future__ import annotations
 import csv
 import json
 import re
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from haifa_agent_evals.config import EvaluationConfig
 
 CSV_FIELDS = (
     "eval_id",
@@ -283,10 +286,42 @@ def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
     )
 
 
-def collect(job_dir: Path, output: Path, eval_id: str | None = None) -> list[Result]:
+def _validate_matrix(results: list[Result], config: EvaluationConfig) -> None:
+    expected = {
+        (candidate.id, task, attempt)
+        for candidate in config.candidates
+        for task in config.tasks
+        for attempt in range(1, config.attempts + 1)
+    }
+    observed_counts = Counter(
+        (result.candidate, result.task_id, result.attempt) for result in results
+    )
+    observed = set(observed_counts)
+    duplicates = sorted(key for key, count in observed_counts.items() if count > 1)
+    missing = sorted(expected - observed)
+    unknown = sorted(observed - expected)
+    failures: list[str] = []
+    if missing:
+        failures.append(f"missing={missing}")
+    if duplicates:
+        failures.append(f"duplicate={duplicates}")
+    if unknown:
+        failures.append(f"unknown={unknown}")
+    if failures:
+        raise ValueError("trial matrix is incomplete: " + "; ".join(failures))
+
+
+def collect(
+    job_dir: Path,
+    output: Path,
+    eval_id: str | None = None,
+    config: EvaluationConfig | None = None,
+) -> list[Result]:
     if not job_dir.is_dir():
         raise ValueError(f"job directory does not exist: {job_dir}")
-    resolved_eval_id = eval_id or job_dir.name
+    if config is not None and eval_id is not None and config.id != eval_id:
+        raise ValueError("eval id does not match the supplied config")
+    resolved_eval_id = config.id if config is not None else (eval_id or job_dir.name)
     trial_dirs = sorted(
         result_path.parent
         for result_path in job_dir.rglob("result.json")
@@ -295,6 +330,8 @@ def collect(job_dir: Path, output: Path, eval_id: str | None = None) -> list[Res
     if not trial_dirs:
         raise ValueError("no Harbor trial result.json files found")
     results = [_trial_result(job_dir, trial_dir, resolved_eval_id) for trial_dir in trial_dirs]
+    if config is not None:
+        _validate_matrix(results, config)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=CSV_FIELDS, lineterminator="\n")

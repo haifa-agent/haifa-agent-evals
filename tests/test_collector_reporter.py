@@ -2,7 +2,10 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
+
 from haifa_agent_evals.collector import collect
+from haifa_agent_evals.config import Candidate, EvaluationConfig
 from haifa_agent_evals.reporter import report
 
 
@@ -176,3 +179,42 @@ def test_wrappers_forward_unix_style_arguments() -> None:
     root = Path(__file__).parents[1]
     assert "uv run evals @args" in (root / "scripts" / "evals.ps1").read_text(encoding="utf-8")
     assert 'exec uv run evals "$@"' in (root / "scripts" / "evals.sh").read_text(encoding="utf-8")
+
+
+def test_collect_validates_the_complete_planned_matrix(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@v1",
+        tasks=("task-a", "task-b"),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "provider/model"),),
+    )
+    job_dir = tmp_path / "job"
+    _trial(job_dir, "trial-1", "haifa", "task-a", 1.0, 10)
+    _trial(job_dir, "trial-2", "haifa", "task-b", 0.0, 10)
+
+    results = collect(job_dir, tmp_path / "results.csv", config=config)
+
+    assert len(results) == 2
+
+
+def test_collect_rejects_missing_duplicate_and_unknown_trials(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="smoke",
+        dataset="org/data@v1",
+        tasks=("task-a", "task-b"),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "provider/model"),),
+    )
+    job_dir = tmp_path / "job"
+    _trial(job_dir, "trial-1", "haifa", "task-a", 1.0, 10)
+    _trial(job_dir, "trial-2", "haifa", "task-a", 1.0, 10)
+    _trial(job_dir, "trial-3", "haifa", "task-c", 0.0, 10)
+    output = tmp_path / "results.csv"
+
+    with pytest.raises(ValueError, match="missing=.*duplicate=.*unknown="):
+        collect(job_dir, output, config=config)
+
+    assert not output.exists()

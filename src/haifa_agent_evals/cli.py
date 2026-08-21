@@ -7,6 +7,8 @@ from pathlib import Path
 from haifa_agent_evals.admission import admit
 from haifa_agent_evals.collector import collect
 from haifa_agent_evals.config import load_config
+from haifa_agent_evals.dataset import configured_tasks_path
+from haifa_agent_evals.doctor import doctor
 from haifa_agent_evals.image_cache import (
     DEFAULT_IMAGE,
     build_image,
@@ -15,7 +17,7 @@ from haifa_agent_evals.image_cache import (
     seed_aider_runtime,
 )
 from haifa_agent_evals.reporter import report
-from haifa_agent_evals.runner import run
+from haifa_agent_evals.runner import new_run_id, run
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -26,6 +28,21 @@ def _parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--config", type=Path, required=True)
     run_parser.add_argument("--work-dir", type=Path)
     run_parser.add_argument("--plan-only", action="store_true")
+    run_parser.add_argument("--tasks-path", type=Path)
+    run_parser.add_argument("--admission", type=Path)
+    run_parser.add_argument("--doctor-output", type=Path)
+    run_parser.add_argument("--jar", type=Path)
+    run_parser.add_argument("--container-cli")
+
+    doctor_parser = commands.add_parser(
+        "doctor", help="run read-only checks before a paid evaluation"
+    )
+    doctor_parser.add_argument("--config", type=Path, required=True)
+    doctor_parser.add_argument("--tasks-path", type=Path)
+    doctor_parser.add_argument("--admission", type=Path)
+    doctor_parser.add_argument("--output", type=Path)
+    doctor_parser.add_argument("--jar", type=Path)
+    doctor_parser.add_argument("--container-cli")
 
     admit_parser = commands.add_parser(
         "admit", help="validate a pinned dataset with oracle and nop calibration evidence"
@@ -40,6 +57,7 @@ def _parser() -> argparse.ArgumentParser:
     collect_parser.add_argument("--job-dir", type=Path, required=True)
     collect_parser.add_argument("--output", type=Path, required=True)
     collect_parser.add_argument("--eval-id")
+    collect_parser.add_argument("--config", type=Path)
 
     report_parser = commands.add_parser("report", help="render a Markdown comparison")
     report_parser.add_argument("--results", type=Path, required=True)
@@ -76,8 +94,54 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "run":
         config = load_config(args.config)
-        work_dir = args.work_dir or Path("work") / config.id
-        print(run(config, work_dir, args.plan_only))
+        work_dir = args.work_dir or Path("work") / config.id / new_run_id()
+        tasks_path = configured_tasks_path(config, args.tasks_path)
+        admission = None
+        doctor_output = None
+        if not args.plan_only:
+            admission = args.admission or Path("work") / "admissions" / f"{config.id}.json"
+            doctor_output = (
+                args.doctor_output or work_dir.parent / f"{work_dir.name}-preflight.json"
+            )
+            preflight = doctor(
+                config,
+                tasks_path,
+                admission,
+                doctor_output,
+                jar_path=args.jar,
+                container_cli=args.container_cli,
+            )
+            if preflight["status"] != "READY":
+                print(json.dumps(preflight, indent=2))
+                return 2
+        runner_tasks_path = tasks_path if not args.plan_only else args.tasks_path
+        print(
+            run(
+                config,
+                work_dir,
+                args.plan_only,
+                runner_tasks_path,
+                args.jar,
+                admission,
+                doctor_output,
+            )
+        )
+    elif args.command == "doctor":
+        config = load_config(args.config)
+        tasks_path = configured_tasks_path(config, args.tasks_path)
+        admission = args.admission or Path("work") / "admissions" / f"{config.id}.json"
+        output = args.output or Path("work") / "preflight" / f"{config.id}.json"
+        preflight = doctor(
+            config,
+            tasks_path,
+            admission,
+            output,
+            jar_path=args.jar,
+            container_cli=args.container_cli,
+        )
+        print(json.dumps(preflight, indent=2))
+        if preflight["status"] != "READY":
+            return 2
     elif args.command == "admit":
         config = load_config(args.config)
         admitted = admit(
@@ -89,7 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps({"status": admitted["status"], "output": str(args.output)}))
     elif args.command == "collect":
-        results = collect(args.job_dir, args.output, args.eval_id)
+        config = load_config(args.config) if args.config else None
+        results = collect(args.job_dir, args.output, args.eval_id, config)
         print(f"collected {len(results)} attempts into {args.output}")
     elif args.command == "report":
         print(report(args.results, args.output))

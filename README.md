@@ -43,8 +43,12 @@ uv run evals admit --config evals/coding-smoke-v1.yaml \
   --oracle-job-dir work/calibration/oracle \
   --nop-job-dir work/calibration/nop \
   --output work/admissions/coding-smoke-v1.json
+uv run evals doctor --config evals/coding-smoke-v1.yaml \
+  --admission work/admissions/coding-smoke-v1.json
 uv run evals run --config evals/coding-smoke-v1.yaml
-uv run evals collect --job-dir work/coding-smoke-v1 --output reports/coding-smoke-v1/results.csv
+uv run evals collect --config evals/coding-smoke-v1.yaml \
+  --job-dir work/coding-smoke-v1/<run-id> \
+  --output reports/coding-smoke-v1/<run-id>/results.csv
 uv run evals report --results reports/coding-smoke-v1/results.csv
 uv run evals image seed-aider --container <stopped-aider-trial-container-id>
 uv run evals image build --java-archive /path/to/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz
@@ -60,6 +64,15 @@ uv run pytest
 `results.csv` 的 `status` 始终是 Harbor 官方 PASS/FAIL/ERROR；`trial_validity`、
 `agent_clean_exit`、`failure_stage` 等字段是正交诊断维度，只解释运行是否有效及失败发生在哪一层，
 不得反向改写正式成绩。
+
+`doctor` 只做只读检查：准入证据、Dataset/Task digest、Harbor 版本、容器连接、JAR smoke、
+Credential 变量存在性、磁盘和 Python 版本。它不会打印 Credential 值，也不会下载镜像或调用模型。
+非 `--plan-only` 的 `run` 会自动执行同一门禁；任一必需项失败时返回 2，不启动 Harbor。
+
+默认运行目录是 `work/<eval-id>/<UTC-time>-<random>/`。每次运行同时生成唯一的
+`*-run-manifest.json`，记录计划矩阵和配置/Dataset/Task/JAR/准入/preflight 摘要；已存在的 Run ID
+不会被覆盖。正式收集应始终传入 `--config`，缺失、重复或未知 Candidate × Task × Attempt 会阻止
+CSV 生成。
 
 ## Agent 基础设施镜像
 
