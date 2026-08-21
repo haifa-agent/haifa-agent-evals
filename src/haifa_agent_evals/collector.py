@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from haifa_agent_evals.config import EvaluationConfig
+from haifa_agent_evals.evidence import inspect_haifa_evidence
+from haifa_agent_evals.verifier_counts import extract_verifier_counts
 
 CSV_FIELDS = (
     "eval_id",
@@ -84,9 +86,7 @@ class Result:
             "agent_clean_exit": self._boolean(self.agent_clean_exit),
             "workspace_changed": self._boolean(self.workspace_changed),
             "verifier_executed": self._boolean(self.verifier_executed),
-            "verifier_selected": (
-                "" if self.verifier_selected is None else self.verifier_selected
-            ),
+            "verifier_selected": ("" if self.verifier_selected is None else self.verifier_selected),
             "verifier_discovered": (
                 "" if self.verifier_discovered is None else self.verifier_discovered
             ),
@@ -218,7 +218,12 @@ def _trial_validity(reward: float | None, error_type: str, failure_stage: str) -
     return "INCOMPLETE"
 
 
-def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
+def _trial_result(
+    job_dir: Path,
+    trial_dir: Path,
+    eval_id: str,
+    require_evidence: bool = False,
+) -> Result:
     config = _read_json(trial_dir / "config.json")
     raw = _read_json(trial_dir / "result.json")
     reward = _reward(raw)
@@ -256,6 +261,24 @@ def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
     agent_clean_exit = None
     if exit_code is not None:
         agent_clean_exit = exit_code == 0 and not error_type
+    workspace_changed = None
+    model_attempts = None
+    tool_outcome_unknown = None
+    evidence_present = (trial_dir / "agent" / "haifa-runtime.db").is_file() or (
+        trial_dir / "agent" / "haifa-trace.jsonl"
+    ).is_file()
+    if candidate == "haifa" and (require_evidence or evidence_present):
+        evidence = inspect_haifa_evidence(trial_dir)
+        workspace_changed = evidence.workspace_changed
+        model_attempts = evidence.model_attempts
+        tool_outcome_unknown = evidence.tool_outcome_unknown
+        failure_stage = evidence.failure_stage or failure_stage
+        failure_code = evidence.failure_code or error_type
+        if not evidence.valid:
+            trial_validity = "INCOMPLETE"
+    else:
+        failure_code = error_type
+    verifier_counts = extract_verifier_counts(trial_dir / "verifier" / "test-stdout.txt")
     language = _language(task_id)
     attempt = 1
     return Result(
@@ -269,15 +292,15 @@ def _trial_result(job_dir: Path, trial_dir: Path, eval_id: str) -> Result:
         status=status,
         trial_validity=trial_validity,
         agent_clean_exit=agent_clean_exit,
-        workspace_changed=None,
+        workspace_changed=workspace_changed,
         verifier_executed=verifier_executed,
-        verifier_selected=None,
-        verifier_discovered=None,
-        verifier_ignored=None,
+        verifier_selected=None if verifier_counts is None else verifier_counts.selected,
+        verifier_discovered=None if verifier_counts is None else verifier_counts.discovered,
+        verifier_ignored=None if verifier_counts is None else verifier_counts.ignored,
         failure_stage=failure_stage,
-        failure_code=error_type,
-        model_attempts=None,
-        tool_outcome_unknown=None,
+        failure_code=failure_code,
+        model_attempts=model_attempts,
+        tool_outcome_unknown=tool_outcome_unknown,
         reward=reward,
         duration_seconds=duration,
         exit_code=exit_code,
@@ -316,6 +339,7 @@ def collect(
     output: Path,
     eval_id: str | None = None,
     config: EvaluationConfig | None = None,
+    require_evidence: bool = False,
 ) -> list[Result]:
     if not job_dir.is_dir():
         raise ValueError(f"job directory does not exist: {job_dir}")
@@ -329,7 +353,10 @@ def collect(
     )
     if not trial_dirs:
         raise ValueError("no Harbor trial result.json files found")
-    results = [_trial_result(job_dir, trial_dir, resolved_eval_id) for trial_dir in trial_dirs]
+    results = [
+        _trial_result(job_dir, trial_dir, resolved_eval_id, require_evidence)
+        for trial_dir in trial_dirs
+    ]
     if config is not None:
         _validate_matrix(results, config)
     output.parent.mkdir(parents=True, exist_ok=True)

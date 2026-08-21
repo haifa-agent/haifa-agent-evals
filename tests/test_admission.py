@@ -14,9 +14,7 @@ def _task(tasks_path: Path, name: str) -> Path:
     for directory in ("environment", "tests", "solution"):
         (path / directory).mkdir(parents=True, exist_ok=True)
     (path / "instruction.md").write_text("Implement the public contract.\n", encoding="utf-8")
-    (path / "task.toml").write_text(
-        f'version = "1.0"\n[task]\nname = "{name}"\n', encoding="utf-8"
-    )
+    (path / "task.toml").write_text(f'version = "1.0"\n[task]\nname = "{name}"\n', encoding="utf-8")
     return path
 
 

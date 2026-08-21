@@ -6,7 +6,7 @@ from collections import defaultdict
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from haifa_agent_evals.config import load_config
+from haifa_agent_evals.config import EvaluationConfig, load_config
 
 
 def _read_rows(path: Path) -> list[dict[str, str]]:
@@ -37,6 +37,9 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
         "agent_clean_exit": "unknown",
         "workspace_changed": "unknown",
         "verifier_executed": "unknown",
+        "verifier_selected": "",
+        "verifier_discovered": "",
+        "verifier_ignored": "",
         "failure_stage": "",
         "failure_code": "",
         "model_attempts": "",
@@ -60,11 +63,18 @@ def _single_value(rows: list[dict[str, str]], field: str) -> str:
     return values[0] if len(values) == 1 else "mixed"
 
 
-def _evaluation_facts(rows: list[dict[str, str]]) -> tuple[str, str, str]:
+def _evaluation_facts(
+    rows: list[dict[str, str]],
+    config: EvaluationConfig | None = None,
+) -> tuple[str, str, str]:
     eval_id = _single_value(rows, "eval_id")
     repository = Path(__file__).resolve().parents[2]
     config_path = repository / "evals" / f"{eval_id}.yaml"
-    dataset = load_config(config_path).dataset if config_path.is_file() else "unavailable"
+    dataset = (
+        config.dataset
+        if config is not None
+        else (load_config(config_path).dataset if config_path.is_file() else "unavailable")
+    )
     try:
         harbor_version = version("harbor")
     except PackageNotFoundError:
@@ -80,13 +90,17 @@ def _failure_reason(row: dict[str, str]) -> str:
     return "Verifier did not return a trusted reward"
 
 
-def report(results_path: Path, output: Path | None = None) -> Path:
+def report(
+    results_path: Path,
+    output: Path | None = None,
+    config: EvaluationConfig | None = None,
+) -> Path:
     rows = _read_rows(results_path)
     output_path = output or results_path.with_name("comparison.md")
     by_candidate: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in rows:
         by_candidate[row["candidate"]].append(row)
-    eval_id, dataset, harbor_version = _evaluation_facts(rows)
+    eval_id, dataset, harbor_version = _evaluation_facts(rows, config)
 
     lines = [
         "# Coding Agent Comparison",
@@ -141,6 +155,28 @@ def report(results_path: Path, output: Path | None = None) -> Path:
     )
     for validity in sorted(validity_counts):
         lines.append(f"| {validity} | {validity_counts[validity]} |")
+
+    verifier_counts = [row for row in rows if row["verifier_selected"]]
+    lines.extend(
+        [
+            "",
+            "## Verifier test selection",
+            "",
+            "Counts are included only when a supported verifier emits a recognizable summary; "
+            "unknown remains explicit.",
+            "",
+            "| Candidate | Task | Selected | Discovered | Ignored/filtered |",
+            "| --- | --- | ---: | ---: | ---: |",
+        ]
+    )
+    if verifier_counts:
+        for row in verifier_counts:
+            lines.append(
+                f"| {row['candidate']} | {row['task_id']} | {row['verifier_selected']} | "
+                f"{row['verifier_discovered'] or '-'} | {row['verifier_ignored'] or '0'} |"
+            )
+    else:
+        lines.append("| - | - | unknown | unknown | unknown |")
 
     candidates = sorted(by_candidate)
     tasks = sorted({row["task_id"] for row in rows})

@@ -50,6 +50,9 @@ uv run evals collect --config evals/coding-smoke-v1.yaml \
   --job-dir work/coding-smoke-v1/<run-id> \
   --output reports/coding-smoke-v1/<run-id>/results.csv
 uv run evals report --results reports/coding-smoke-v1/results.csv
+uv run evals finalize --config evals/coding-smoke-v1.yaml \
+  --job-dir work/coding-smoke-v1/<run-id> \
+  --archive-dir run_data/coding-smoke-v1/final/<run-id>
 uv run evals image seed-aider --container <stopped-aider-trial-container-id>
 uv run evals image build --java-archive /path/to/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz
 uv run evals image check
@@ -73,6 +76,16 @@ Credential 变量存在性、磁盘和 Python 版本。它不会打印 Credentia
 `*-run-manifest.json`，记录计划矩阵和配置/Dataset/Task/JAR/准入/preflight 摘要；已存在的 Run ID
 不会被覆盖。正式收集应始终传入 `--config`，缺失、重复或未知 Candidate × Task × Attempt 会阻止
 CSV 生成。
+
+`finalize` 不覆盖已有目录。它把完整 Harbor Job 复制到私有 `jobs/harbor-job/`，在副本上执行矩阵与
+Haifa SQLite/Trace/Transcript 校验，生成 `reports/results.csv`、`reports/comparison.md`、
+`integrity/finalization.json` 和 `integrity/SHA256SUMS.txt`。缺失轨迹、无效 Trial、Credential/
+reasoning/Provider 原始响应扫描命中或已存在归档目录都会阻止正式完成；诊断报告仍会保留，便于修复。
+
+Collector 会从能够可靠识别的 Rust、Pytest、Jest 和 Gradle Verifier 摘要提取
+Selected/Discovered/Ignored 数量。无法识别时保持 unknown，不猜测测试覆盖率。`execution.run` 可能产生
+任意副作用，因此只有成功的结构化 `file.create/write/delete/move/patch` 才能直接证明工作区已修改；
+只有命令执行证据时保持 unknown。
 
 ## Agent 基础设施镜像
 

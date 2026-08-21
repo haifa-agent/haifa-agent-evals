@@ -66,11 +66,7 @@ def _calibration_results(job_dir: Path, expected_agent: str) -> dict[str, Calibr
             continue
         raw = _read_json(path)
         config = _read_json(path.parent / "config.json")
-        agent = str(
-            _nested(raw, "agent_info", "name")
-            or _nested(config, "agent", "name")
-            or ""
-        )
+        agent = str(_nested(raw, "agent_info", "name") or _nested(config, "agent", "name") or "")
         if agent != expected_agent:
             continue
         task_id = str(raw.get("task_name") or _nested(config, "task", "name") or "")
@@ -127,8 +123,7 @@ def admit(
     unknown_nop = sorted(set(nop) - set(config.tasks))
     if unknown_oracle or unknown_nop:
         raise ValueError(
-            "calibration contains unknown tasks: "
-            + ", ".join(unknown_oracle + unknown_nop)
+            "calibration contains unknown tasks: " + ", ".join(unknown_oracle + unknown_nop)
         )
 
     task_results: list[TaskAdmission] = []

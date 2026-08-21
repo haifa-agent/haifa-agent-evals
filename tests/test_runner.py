@@ -113,9 +113,7 @@ def test_adds_one_explicit_docker_compose_overlay(tmp_path: Path, monkeypatch) -
 
     plan_data = json.loads(plan.read_text(encoding="utf-8"))
     assert plan_data["extraDockerCompose"] is True
-    job_config = yaml.safe_load(
-        (tmp_path / "job-harbor-job.yaml").read_text(encoding="utf-8")
-    )
+    job_config = yaml.safe_load((tmp_path / "job-harbor-job.yaml").read_text(encoding="utf-8"))
     assert job_config["environment"]["extra_docker_compose"] == [str(overlay.resolve())]
 
 
@@ -191,9 +189,7 @@ def test_default_jar_is_in_sibling_haifa_agent_repository() -> None:
     )
 
 
-def test_child_environment_forces_utf8_for_harbor_output(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_child_environment_forces_utf8_for_harbor_output(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("PYTHONUTF8", "0")
     monkeypatch.setenv("PYTHONIOENCODING", "gbk")
 

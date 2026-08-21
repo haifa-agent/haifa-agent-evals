@@ -1,6 +1,6 @@
 # 评测基础设施改进优先级
 
-> 状态：Proposed
+> 状态：Implemented in current branch; real-environment acceptance pending
 > 日期：2026-08-21
 > 输入：`coding-polyglot-30-v1` 首轮真实评测、Python/Rust 专项复盘与完整轨迹归档
 > 既有实施计划（执行时按本文优先级重排）：[`07-next-stage-evaluation-reliability-plan.md`](07-next-stage-evaluation-reliability-plan.md)
@@ -276,3 +276,16 @@ SQLite 仍是 Haifa 运行事实源，JSONL 是便于交换和查看的投影。
 - [OpenAI — Evaluation best practices](https://developers.openai.com/api/docs/guides/evaluation-best-practices)
 - [OpenAI — Agent evals](https://developers.openai.com/api/docs/guides/agent-evals)
 - [Harbor documentation](https://harborframework.com/docs)
+
+## 13. 当前实现状态
+
+截至 2026-08-21，本文的三个 Phase 已在当前特性分支实现：
+
+- `admit`：冻结 Dataset/Task digest 与唯一 Oracle PASS、NOP 可信 FAIL 门禁；
+- `doctor`：准入、Dataset、Harbor、Container、JAR、Credential 存在性、磁盘和 Python 的只读检查；
+- `run`：唯一 Run ID、不可覆盖控制文件和配置/Dataset/Task/JAR/preflight 指纹；
+- `collect/report`：计划矩阵完整性、官方成绩与有效性/干净完成分层、可识别 Verifier 测试数量；
+- `finalize`：私有 Harbor Job 归档、SQLite/Trace/Transcript 校验、安全扫描和 SHA-256 清单。
+
+自动化离线验收已完成。仍需在下一次正式评测前完成两项真实环境验收：为目标 Dataset 生成新的
+Oracle/NOP 准入证据；在实际 Docker/Podman 后端上运行 1～2 题，确认 Container 清理和最终归档。

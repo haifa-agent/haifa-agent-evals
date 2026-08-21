@@ -120,6 +120,11 @@ def _task_digests(config: EvaluationConfig) -> dict[str, str]:
     return {task.name: task.digest for task in manifest.tasks if task.name in config.tasks}
 
 
+def config_sha256(config: EvaluationConfig) -> str:
+    payload = json.dumps(asdict(config), sort_keys=True, separators=(",", ":"))
+    return sha256(payload.encode()).hexdigest()
+
+
 def _child_environment(work_dir: Path) -> dict[str, str]:
     environment = os.environ.copy()
     # Harbor renders Unicode summary tables after a job. Force UTF-8 for the
@@ -210,12 +215,11 @@ def _write_inputs(
     resolved_jar = jar_path or Path(
         os.environ.get("HAIFA_EVAL_JAR_PATH", str(_default_haifa_jar()))
     )
-    config_payload = json.dumps(asdict(config), sort_keys=True, separators=(",", ":"))
     manifest = {
         "schemaVersion": 1,
         "runId": work_dir.name,
         "evalId": config.id,
-        "configSha256": sha256(config_payload.encode()).hexdigest(),
+        "configSha256": config_sha256(config),
         "dataset": config.dataset,
         "datasetSource": "local" if tasks_path else "registry",
         "tasks": list(config.tasks),
@@ -240,6 +244,10 @@ def _write_inputs(
         ),
         "admissionSha256": _file_sha256(admission_path) if admission_path else None,
         "preflightSha256": _file_sha256(preflight_path) if preflight_path else None,
+        "harborJobConfigSha256": _file_sha256(job_config_path),
+        "extraDockerComposeSha256": (
+            _file_sha256(extra_docker_compose) if extra_docker_compose else None
+        ),
         "startedAt": datetime.now(UTC).isoformat(),
         "finishedAt": None,
         "runStatus": "PLANNED",

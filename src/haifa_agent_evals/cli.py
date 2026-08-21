@@ -9,6 +9,7 @@ from haifa_agent_evals.collector import collect
 from haifa_agent_evals.config import load_config
 from haifa_agent_evals.dataset import configured_tasks_path
 from haifa_agent_evals.doctor import doctor
+from haifa_agent_evals.finalizer import finalize
 from haifa_agent_evals.image_cache import (
     DEFAULT_IMAGE,
     build_image,
@@ -58,10 +59,21 @@ def _parser() -> argparse.ArgumentParser:
     collect_parser.add_argument("--output", type=Path, required=True)
     collect_parser.add_argument("--eval-id")
     collect_parser.add_argument("--config", type=Path)
+    collect_parser.add_argument("--validate-evidence", action="store_true")
 
     report_parser = commands.add_parser("report", help="render a Markdown comparison")
     report_parser.add_argument("--results", type=Path, required=True)
     report_parser.add_argument("--output", type=Path)
+
+    finalize_parser = commands.add_parser(
+        "finalize", help="archive a complete Harbor run and generate verified reports"
+    )
+    finalize_parser.add_argument("--config", type=Path, required=True)
+    finalize_parser.add_argument("--job-dir", type=Path, required=True)
+    finalize_parser.add_argument("--archive-dir", type=Path, required=True)
+    finalize_parser.add_argument("--run-manifest", type=Path)
+    finalize_parser.add_argument("--admission", type=Path)
+    finalize_parser.add_argument("--preflight", type=Path)
 
     image_parser = commands.add_parser("image", help="manage the agent infrastructure image")
     image_commands = image_parser.add_subparsers(dest="image_command", required=True)
@@ -154,10 +166,28 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"status": admitted["status"], "output": str(args.output)}))
     elif args.command == "collect":
         config = load_config(args.config) if args.config else None
-        results = collect(args.job_dir, args.output, args.eval_id, config)
+        results = collect(
+            args.job_dir,
+            args.output,
+            args.eval_id,
+            config,
+            args.validate_evidence,
+        )
         print(f"collected {len(results)} attempts into {args.output}")
     elif args.command == "report":
         print(report(args.results, args.output))
+    elif args.command == "finalize":
+        finalized = finalize(
+            args.config,
+            args.job_dir,
+            args.archive_dir,
+            run_manifest_path=args.run_manifest,
+            admission_path=args.admission,
+            preflight_path=args.preflight,
+        )
+        print(json.dumps(finalized, indent=2))
+        if finalized["status"] != "COMPLETE":
+            return 2
     elif args.image_command == "build":
         print(build_image(args.java_archive, args.image, args.container_cli, args.aider_runtime))
     elif args.image_command == "seed-aider":

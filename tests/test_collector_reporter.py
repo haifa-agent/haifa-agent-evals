@@ -90,14 +90,10 @@ def test_collect_and_report_keep_error_out_of_valid_denominator(tmp_path: Path) 
     assert "- Harbor: `0.20.0`" in text
     assert "- Model cost: `unavailable`" in text
     assert "complete candidate systems" in text
-    assert (
-        "| haifa | provider/model | 1.2.3 | 2 | 2 | 1 | 50.0% | 0 | 2/2 | 0 | 15.00s |"
-        in text
-    )
+    assert "| haifa | provider/model | 1.2.3 | 2 | 2 | 1 | 50.0% | 0 | 2/2 | 0 | 15.00s |" in text
     assert (
         "| aider | provider/model | 1.2.3 | 1 | 0 | 0 | unavailable | 1 | 0/1 | 1 | "
-        "30.00s |"
-        in text
+        "30.00s |" in text
     )
     assert "## Data quality" in text
     assert "| INVALID_INFRA | 1 |" in text
@@ -105,10 +101,7 @@ def test_collect_and_report_keep_error_out_of_valid_denominator(tmp_path: Path) 
     assert "Verifier reward 0.0" in text
     assert "Verifier did not return a trusted reward" not in text
     assert "## Agent exceptions" in text
-    assert (
-        "| aider | task-a | ERROR | INVALID_INFRA | incomplete | 0 | EnvironmentError |"
-        in text
-    )
+    assert "| aider | task-a | ERROR | INVALID_INFRA | incomplete | 0 | EnvironmentError |" in text
     assert "## Manual review and test focus" in text
     assert "both candidates were observed running as root" in text
     assert "ignored raw logs" in text
@@ -132,10 +125,7 @@ def test_report_shows_exception_even_when_verifier_passes(tmp_path: Path) -> Non
 
     text = report(output).read_text(encoding="utf-8")
 
-    assert (
-        "| haifa | provider/model | 1.2.3 | 1 | 1 | 1 | 100.0% | 0 | 0/1 | 1 | "
-        in text
-    )
+    assert "| haifa | provider/model | 1.2.3 | 1 | 1 | 1 | 100.0% | 0 | 0/1 | 1 | " in text
     assert "| haifa | task-a | PASS | 0 | NonZeroAgentExitCodeError |" in text
 
 
@@ -218,3 +208,30 @@ def test_collect_rejects_missing_duplicate_and_unknown_trials(tmp_path: Path) ->
         collect(job_dir, output, config=config)
 
     assert not output.exists()
+
+
+def test_collect_and_report_preserve_verifier_test_selection(tmp_path: Path) -> None:
+    job_dir = tmp_path / "job"
+    _trial(
+        job_dir,
+        "trial-1",
+        "haifa",
+        "aider/polyglot_rust_macros",
+        1.0,
+        10,
+    )
+    verifier = job_dir / "trial-1" / "verifier"
+    verifier.mkdir()
+    (verifier / "test-stdout.txt").write_text(
+        "test result: ok. 1 passed; 0 failed; 17 ignored; 0 measured; 0 filtered out\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "results.csv"
+
+    result = collect(job_dir, output)[0]
+    text = report(output).read_text(encoding="utf-8")
+
+    assert result.verifier_selected == 1
+    assert result.verifier_discovered == 18
+    assert result.verifier_ignored == 17
+    assert "| haifa | aider/polyglot_rust_macros | 1 | 18 | 17 |" in text
