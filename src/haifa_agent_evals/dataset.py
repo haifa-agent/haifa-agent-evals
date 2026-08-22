@@ -56,8 +56,8 @@ def configured_tasks_path(config: EvaluationConfig, explicit_path: Path | None =
     if configured:
         return Path(configured)
     manifest_path = dataset_manifest_path(config)
-    default_directory = "derived-tasks" if manifest_path.is_file() else "selected-tasks"
-    return repository_root() / "work" / default_directory
+    default_directory = "derived" if manifest_path.is_file() else "selected"
+    return repository_root() / "work" / "tasks" / default_directory
 
 
 def local_tasks_path(
@@ -76,5 +76,5 @@ def local_tasks_path(
     if explicitly_configured:
         raise ValueError("HAIFA_EVAL_TASKS_PATH does not contain every configured task")
     if manifest_path.is_file():
-        raise ValueError("pinned local dataset is missing; prepare work/derived-tasks first")
+        raise ValueError("pinned local dataset is missing; prepare work/tasks/derived first")
     return None

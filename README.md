@@ -39,26 +39,26 @@
 ```bash
 uv sync --frozen
 uv run evals admit --config evals/coding-smoke-v1.yaml \
-  --tasks-path work/derived-tasks \
-  --oracle-job-dir work/calibration/oracle \
-  --nop-job-dir work/calibration/nop \
-  --output work/admissions/coding-smoke-v1.json
+  --tasks-path work/tasks/derived \
+  --oracle-job-dir work/runs/calibration/oracle \
+  --nop-job-dir work/runs/calibration/nop \
+  --output work/gates/admissions/coding-smoke-v1.json
 uv run evals doctor --config evals/coding-smoke-v1.yaml \
-  --admission work/admissions/coding-smoke-v1.json
+  --admission work/gates/admissions/coding-smoke-v1.json
 uv run evals run --config evals/coding-smoke-v1.yaml
 uv run evals collect --config evals/coding-smoke-v1.yaml \
-  --job-dir work/coding-smoke-v1/<run-id> \
+  --job-dir work/runs/evaluations/coding-smoke-v1/<run-id> \
   --output reports/coding-smoke-v1/<run-id>/results.csv
 uv run evals report --results reports/coding-smoke-v1/results.csv
 uv run evals finalize --config evals/coding-smoke-v1.yaml \
-  --job-dir work/coding-smoke-v1/<run-id> \
+  --job-dir work/runs/evaluations/coding-smoke-v1/<run-id> \
   --archive-dir run_data/coding-smoke-v1/final/<run-id>
 uv run evals image seed-aider --container <stopped-aider-trial-container-id>
 uv run evals image build --java-archive /path/to/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz
 uv run evals image check
-uv run evals image prepare-tasks --config evals/coding-smoke-v1.yaml --tasks-path work/derived-tasks
+uv run evals image prepare-tasks --config evals/coding-smoke-v1.yaml --tasks-path work/tasks/derived
 uv run evals infra proxy start --source-port 2081
-uv run evals infra check --output work/preflight/harbor-compose-network.json
+uv run evals infra check --output work/gates/infrastructure/harbor-compose-network.json
 uv run pytest
 ```
 
@@ -76,7 +76,7 @@ Credential 变量存在性、磁盘和 Python 版本。配置 Harbor Compose ove
 也不会下载镜像或调用模型。
 非 `--plan-only` 的 `run` 会自动执行同一门禁；任一必需项失败时返回 2，不启动 Harbor。
 
-默认运行目录是 `work/<eval-id>/<UTC-time>-<random>/`。每次运行同时生成唯一的
+默认运行目录是 `work/runs/evaluations/<eval-id>/<UTC-time>-<random>/`。每次运行同时生成唯一的
 `*-run-manifest.json`，记录计划矩阵和配置/Dataset/Task/JAR/准入/preflight 摘要；已存在的 Run ID
 不会被覆盖。正式收集应始终传入 `--config`，缺失、重复或未知 Candidate × Task × Attempt 会阻止
 CSV 生成。
@@ -102,21 +102,21 @@ Selected/Discovered/Ignored 数量。无法识别时保持 unknown，不猜测�
 `image seed-aider` 只从一个已验证的 Aider trial 容器复制固定 Python 运行时与
 `aider-chat` 安装目录，不复制题目、聊天历史、日志或模型输出。镜像构建会按规范化包名把实际安装元数据与仓库中的完整依赖锁逐项比较，因此来源容器不能静默带入另一套依赖。
 
-构建命令把大体积 JDK 和 Aider runtime 复制到被忽略的 `work/image-cache/` 上下文，不把它们提交到 Git，也不需要容器访问外网。构建完成后会执行无模型冒烟检查，并把实际 image ID、大小、标签和 RepoDigests 写入
-`work/image-cache/agent-infra/image-lock.json`。默认镜像名为
+构建命令把大体积 JDK 和 Aider runtime 复制到被忽略的 `work/cache/images/` 上下文，不把它们提交到 Git，也不需要容器访问外网。构建完成后会执行无模型冒烟检查，并把实际 image ID、大小、标签和 RepoDigests 写入
+`work/cache/images/agent-infra/image-lock.json`。默认镜像名为
 `localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-offline-deps-v4`。镜像还固定
 Gradle 8.7 Wrapper 分发包；构建前必须把官方 zip 放在
-`work/image-cache/gradle/gradle-8.7-bin.zip`（SHA-256
+`work/cache/images/gradle/gradle-8.7-bin.zip`（SHA-256
 `544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d`），避免 Java verifier
 在每个临时容器内重复下载。
-构建脚本还要求 `work/image-cache/gradle/caches/modules-2/` 已预热 JUnit 5.10.0、
+构建脚本还要求 `work/cache/images/gradle/caches/modules-2/` 已预热 JUnit 5.10.0、
 AssertJ 3.25.1 及其运行期依赖；只把 Gradle 的依赖制品/元数据缓存复制进镜像，不复制 daemon、
 项目编译缓存、锁文件或运行日志。依赖缓存内容摘要记录在镜像 label 和 image lock 中。
 
 v4 同时要求：
 
-- `work/image-cache/python/wheels/` 中存在冻结 Python wheelhouse；
-- `work/image-cache/cargo/cache-manifest.json` 与 `registry/cache/` 中实际 `.crate` 数量一致；当前 30 题
+- `work/cache/images/python/wheels/` 中存在冻结 Python wheelhouse；
+- `work/cache/images/cargo/cache-manifest.json` 与 `registry/cache/` 中实际 `.crate` 数量一致；当前 30 题
   的 Rust 子集没有外部 crate，因此允许明确记录为 0，而不是伪造缓存；
 - Gradle、wheelhouse 与 Cargo cache 的 tree digest 全部写入 image label 与 image lock。
 
@@ -129,12 +129,12 @@ Haifa adapter 会先探测镜像中的 Java 21，再决定是否上传 JDK；固
 该镜像不能直接替代某一道 Harbor 题目镜像，因为它刻意不包含 `/app` 题目 workspace。若后续把它作为题目 Dockerfile 的基础层或生成 Harbor `docker_image`，必须固定新的环境/数据集摘要；不能把结果混入当前冻结数据集。
 
 `image prepare-tasks` 完成上述转换：它先验证原始冻结数据集，并按 `/app` 文件内容匹配本机已经成功构建的 Harbor 题目镜像；随后从这些镜像复用语言工具链与 workspace，再叠加固定 Agent 基础设施，全程不重新下载语言依赖。生成镜像使用 RepoDigest 写入新的 `task.toml`，最后生成新的任务摘要、数据集摘要和 eval 配置。输出默认位于
-`work/image-cache/task-environments/coding-smoke-v1-agent-infra-v4/`。
+`work/cache/images/task-environments/coding-smoke-v1-agent-infra-v4/`。
 
 运行生成环境时显式指定两项本地证据：
 
 ```powershell
-$root = "work/image-cache/task-environments/coding-smoke-v1-agent-infra-v4"
+$root = "work/cache/images/task-environments/coding-smoke-v1-agent-infra-v4"
 $env:HAIFA_EVAL_TASKS_PATH = "$root/tasks"
 $env:HAIFA_EVAL_DATASET_MANIFEST_PATH = "$root/coding-smoke-v1-agent-infra-v4.dataset.toml"
 uv run evals run --config "$root/coding-smoke-v1-agent-infra-v4.yaml"
@@ -157,7 +157,7 @@ Windows proxy 127.0.0.1:2081
 ```powershell
 uv run evals infra proxy start --source-port 2081
 $env:HAIFA_EVALS_CONTAINER_PROXY = "http://host.containers.internal:22081"
-uv run evals infra check --output work/preflight/harbor-compose-network.json
+uv run evals infra check --output work/gates/infrastructure/harbor-compose-network.json
 ```
 
 `infra check` 使用 `infra/preflight/tasks/harbor-compose-network` 启动一条零模型 Oracle Trial，在 Harbor
@@ -166,7 +166,7 @@ uv run evals infra check --output work/preflight/harbor-compose-network.json
 
 ```powershell
 $env:HAIFA_EVAL_EXTRA_DOCKER_COMPOSE = (Resolve-Path "infra/harbor-compose-proxy.yaml").Path
-$env:HAIFA_EVAL_INFRA_EVIDENCE = (Resolve-Path "work/preflight/harbor-compose-network.json").Path
+$env:HAIFA_EVAL_INFRA_EVIDENCE = (Resolve-Path "work/gates/infrastructure/harbor-compose-network.json").Path
 uv run evals doctor --config <eval.yaml> --tasks-path <tasks> --admission <admission.json> --container-cli podman
 uv run evals run --config <eval.yaml> --tasks-path <tasks> --admission <admission.json> --container-cli podman
 ```
@@ -197,7 +197,7 @@ uv run evals run --config <eval.yaml> --tasks-path <tasks> --admission <admissio
 - 两个 model route（Haifa 与 Aider）
 - 本地派生数据清单：`evals/coding-smoke-v1.dataset.toml`
 
-默认 `run` 期望在 `work/derived-tasks` 下有对应的 6 个 task 目录，并在执行前校验 Harbor task digest 与 dataset digest；如果要使用其他完整缓存目录，请用 `HAIFA_EVAL_TASKS_PATH` 指向该路径，校验逻辑同样生效。
+默认 `run` 期望在 `work/tasks/derived` 下有对应的 6 个 task 目录，并在执行前校验 Harbor task digest 与 dataset digest；如果要使用其他完整缓存目录，请用 `HAIFA_EVAL_TASKS_PATH` 指向该路径，校验逻辑同样生效。
 
 可选环境变量：
 
@@ -205,7 +205,7 @@ uv run evals run --config <eval.yaml> --tasks-path <tasks> --admission <admissio
 - `HAIFA_EVAL_JAVA_ARCHIVE_PATH`：使用固定的 Temurin JDK 压缩包（否则缺失时按需下载并校验）；
 - `HAIFA_EVAL_EXTRA_DOCKER_COMPOSE`：仅在本地环境确实需要额外 Harbor compose 覆盖层时使用，路径必须已存在，Runner 会写入生成的计划与 Job 配置。
 
-`work/` 下运行产物和 `reports/` 报告文件按仓库约定写入并默认忽略（不提交）。
+`work/` 下除结构说明 `work/README.md` 外均默认忽略（不提交）；详细分层、写入位置和保留规则见该文件。`reports/` 报告文件也默认忽略。
 
 ## 参考
 

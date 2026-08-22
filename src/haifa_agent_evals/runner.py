@@ -19,6 +19,7 @@ from haifa_agent_evals.config import Candidate, EvaluationConfig
 from haifa_agent_evals.dataset import (
     dataset_manifest_path,
     local_tasks_path,
+    repository_root,
     validate_local_dataset,
 )
 
@@ -125,6 +126,15 @@ def config_sha256(config: EvaluationConfig) -> str:
     return sha256(payload.encode()).hexdigest()
 
 
+def _tooling_directory(work_dir: Path) -> Path:
+    repository_work = (repository_root() / "work").resolve()
+    try:
+        work_dir.resolve().relative_to(repository_work)
+    except ValueError:
+        return work_dir.parent / ".tooling"
+    return repository_work / "cache" / "tooling"
+
+
 def _child_environment(work_dir: Path, container_cli: str | None = None) -> dict[str, str]:
     environment = os.environ.copy()
     # Harbor renders Unicode summary tables after a job. Force UTF-8 for the
@@ -145,7 +155,7 @@ def _child_environment(work_dir: Path, container_cli: str | None = None) -> dict
     )
     force_podman = bool(configured and Path(configured).stem.lower() == "podman")
     if podman and (force_podman or shutil.which("docker", path=environment.get("PATH")) is None):
-        tooling_dir = work_dir.parent / ".tooling"
+        tooling_dir = _tooling_directory(work_dir)
         tooling_dir.mkdir(parents=True, exist_ok=True)
         wrapper = tooling_dir / "docker.exe"
         if not wrapper.is_file():
@@ -256,9 +266,7 @@ def _write_inputs(
         "admissionSha256": _file_sha256(admission_path) if admission_path else None,
         "preflightSha256": _file_sha256(preflight_path) if preflight_path else None,
         "infrastructureEvidenceSha256": (
-            _file_sha256(infrastructure_evidence_path)
-            if infrastructure_evidence_path
-            else None
+            _file_sha256(infrastructure_evidence_path) if infrastructure_evidence_path else None
         ),
         "harborJobConfigSha256": _file_sha256(job_config_path),
         "extraDockerComposeSha256": (

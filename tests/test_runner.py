@@ -12,11 +12,23 @@ from haifa_agent_evals.config import Candidate, EvaluationConfig, load_config
 from haifa_agent_evals.runner import (
     _child_environment,
     _default_haifa_jar,
+    _tooling_directory,
     _validate_local_dataset,
     build_commands,
     build_job_config,
     run,
 )
+
+
+def test_repository_work_uses_shared_tooling_cache(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("haifa_agent_evals.runner.repository_root", lambda: tmp_path)
+
+    work_dir = tmp_path / "work" / "runs" / "evaluations" / "smoke" / "run-1"
+
+    assert _tooling_directory(work_dir) == tmp_path / "work" / "cache" / "tooling"
+    assert _tooling_directory(tmp_path / "external" / "run-1") == (
+        tmp_path / "external" / ".tooling"
+    )
 
 
 def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:

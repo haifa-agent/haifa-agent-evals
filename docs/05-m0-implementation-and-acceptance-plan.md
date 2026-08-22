@@ -9,7 +9,7 @@ M0 完成后能够执行：
 
 ```text
 evals run --config evals/coding-smoke-v1.yaml
-evals collect --job-dir work/<job>
+evals collect --job-dir work/runs/evaluations/<eval-id>/<run-id>
 evals report --results reports/coding-smoke-v1/results.csv
 ```
 

@@ -64,7 +64,7 @@ MVP 不计算置信区间、Bootstrap、pass@k 或综合能力分。
 - Container 不挂载用户 Home、源码仓、Docker Socket 或 Git/GitHub 凭据；
 - Hidden Tests、Gold Patch 和其他 Candidate 结果不可见；
 - Haifa 只启用文件与命令工具；
-- 原始 Harbor Jobs 写入 `work/` 并忽略；
+- 原始 Harbor Jobs 写入 `work/runs/` 并忽略；
 - stdout/stderr、Trace 和报告发布前扫描秘密；
 - 超时后必须收敛 Java、Shell 和 Tool 子进程。
 

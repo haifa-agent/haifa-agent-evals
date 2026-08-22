@@ -143,12 +143,14 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "run":
         config = load_config(args.config)
-        work_dir = args.work_dir or Path("work") / config.id / new_run_id()
+        work_dir = args.work_dir or Path("work") / "runs" / "evaluations" / config.id / new_run_id()
         tasks_path = configured_tasks_path(config, args.tasks_path)
         admission = None
         doctor_output = None
         if not args.plan_only:
-            admission = args.admission or Path("work") / "admissions" / f"{config.id}.json"
+            admission = (
+                args.admission or Path("work") / "gates" / "admissions" / f"{config.id}.json"
+            )
             doctor_output = (
                 args.doctor_output or work_dir.parent / f"{work_dir.name}-preflight.json"
             )
@@ -181,8 +183,8 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "doctor":
         config = load_config(args.config)
         tasks_path = configured_tasks_path(config, args.tasks_path)
-        admission = args.admission or Path("work") / "admissions" / f"{config.id}.json"
-        output = args.output or Path("work") / "preflight" / f"{config.id}.json"
+        admission = args.admission or Path("work") / "gates" / "admissions" / f"{config.id}.json"
+        output = args.output or Path("work") / "runs" / "preflight" / "doctor" / f"{config.id}.json"
         preflight = doctor(
             config,
             tasks_path,

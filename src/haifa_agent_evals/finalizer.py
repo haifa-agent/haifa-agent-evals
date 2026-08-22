@@ -181,7 +181,9 @@ def finalize(
     }
     if manifest_trials != expected_trials:
         raise ValueError("run manifest planned trial matrix does not match config")
-    resolved_admission = admission_path or Path("work") / "admissions" / f"{config.id}.json"
+    resolved_admission = (
+        admission_path or Path("work") / "gates" / "admissions" / f"{config.id}.json"
+    )
     resolved_preflight = preflight_path or job_dir.parent / f"{job_dir.name}-preflight.json"
     _validate_evidence_digest(manifest, "admissionSha256", resolved_admission, "admission")
     _validate_evidence_digest(manifest, "preflightSha256", resolved_preflight, "preflight")

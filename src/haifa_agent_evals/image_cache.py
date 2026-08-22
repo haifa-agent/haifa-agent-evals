@@ -17,10 +17,7 @@ from harbor.publisher.packager import Packager
 
 from haifa_agent_evals.config import EvaluationConfig, load_config
 
-DEFAULT_IMAGE = (
-    "localhost/haifa-agent-evals/agent-infra:"
-    "jammy-jdk21-aider0.86.2-offline-deps-v4"
-)
+DEFAULT_IMAGE = "localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-offline-deps-v4"
 JDK_SHA256 = "f2dc5418092c43003db8f9005c4a286e1c0104fea96ccdd49e8ebd037cac9219"
 GRADLE_SHA256 = "544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d"
 _AIDER_TOOL_PATH = Path("root/.local/share/uv/tools/aider-chat")
@@ -70,26 +67,20 @@ def _java_archive(configured: Path | None) -> Path:
 
 
 def _default_aider_runtime() -> Path:
-    return (
-        _repository_root()
-        / "work"
-        / "image-cache"
-        / "agent-infra"
-        / "aider-runtime.tar.gz"
-    )
+    return _repository_root() / "work" / "cache" / "images" / "agent-infra" / "aider-runtime.tar.gz"
 
 
 def _gradle_archive() -> Path:
     configured = os.environ.get("HAIFA_EVAL_GRADLE_ARCHIVE_PATH")
     path = (
-        Path(configured)
-        if configured
-        else _repository_root()
-        / "work"
-        / "image-cache"
-        / "gradle"
-        / "gradle-8.7-bin.zip"
-    ).expanduser().resolve()
+        (
+            Path(configured)
+            if configured
+            else _repository_root() / "work" / "cache" / "images" / "gradle" / "gradle-8.7-bin.zip"
+        )
+        .expanduser()
+        .resolve()
+    )
     if not path.is_file() or _sha256(path) != GRADLE_SHA256:
         raise ValueError("Gradle 8.7 archive is missing or does not match its pinned digest")
     return path
@@ -97,12 +88,7 @@ def _gradle_archive() -> Path:
 
 def _gradle_dependency_cache() -> Path:
     path = (
-        _repository_root()
-        / "work"
-        / "image-cache"
-        / "gradle"
-        / "caches"
-        / "modules-2"
+        _repository_root() / "work" / "cache" / "images" / "gradle" / "caches" / "modules-2"
     ).resolve()
     required_jars = {
         "byte-buddy-1.14.11.jar",
@@ -120,29 +106,33 @@ def _python_wheelhouse() -> Path:
     configured = os.environ.get("HAIFA_EVAL_PYTHON_WHEELHOUSE_PATH")
     candidates = [
         Path(configured) if configured else None,
-        _repository_root() / "work" / "image-cache" / "python" / "wheels",
-        _repository_root() / "work" / "pip-wheels",
+        _repository_root() / "work" / "cache" / "images" / "python" / "wheels",
+        _repository_root() / "work" / "cache" / "downloads" / "pip-wheels",
     ]
     for candidate in candidates:
         if candidate and candidate.is_dir() and any(candidate.glob("*.whl")):
             return candidate.expanduser().resolve()
     raise ValueError(
-        "Python wheelhouse is missing; populate work/image-cache/python/wheels before build"
+        "Python wheelhouse is missing; populate work/cache/images/python/wheels before build"
     )
 
 
 def _cargo_home() -> Path:
     configured = os.environ.get("HAIFA_EVAL_CARGO_HOME_PATH")
     path = (
-        Path(configured)
-        if configured
-        else _repository_root() / "work" / "image-cache" / "cargo"
-    ).expanduser().resolve()
+        (
+            Path(configured)
+            if configured
+            else _repository_root() / "work" / "cache" / "images" / "cargo"
+        )
+        .expanduser()
+        .resolve()
+    )
     cache = path / "registry" / "cache"
     inventory = path / "cache-manifest.json"
     if not cache.is_dir() or not inventory.is_file():
         raise ValueError(
-            "Cargo cache inventory is missing; populate work/image-cache/cargo before build"
+            "Cargo cache inventory is missing; populate work/cache/images/cargo before build"
         )
     try:
         payload = json.loads(inventory.read_text(encoding="utf-8"))
@@ -195,12 +185,17 @@ def seed_aider_runtime(
     if target.exists():
         return _validate_aider_runtime(target)
     target.parent.mkdir(parents=True, exist_ok=True)
-    running = subprocess.run(  # noqa: S603
-        [cli, "inspect", "--format", "{{.State.Running}}", container],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip().lower() == "true"
+    running = (
+        subprocess.run(  # noqa: S603
+            [cli, "inspect", "--format", "{{.State.Running}}", container],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        .stdout.strip()
+        .lower()
+        == "true"
+    )
     if not running:
         subprocess.run([cli, "start", container], check=True, capture_output=True)  # noqa: S603
     temporary = target.with_name(f"{target.name}.partial")
@@ -267,16 +262,10 @@ def _lock_payload(image: str, inspected: dict[str, Any]) -> dict[str, Any]:
             "jdkArchiveSha256": JDK_SHA256,
             "gradleVersion": "8.7",
             "gradleArchiveSha256": GRADLE_SHA256,
-            "gradleDependencyCacheSha256": labels.get(
-                "io.haifa.evals.gradle-cache-sha256"
-            ),
-            "pythonWheelhouseSha256": labels.get(
-                "io.haifa.evals.python-wheelhouse-sha256"
-            ),
+            "gradleDependencyCacheSha256": labels.get("io.haifa.evals.gradle-cache-sha256"),
+            "pythonWheelhouseSha256": labels.get("io.haifa.evals.python-wheelhouse-sha256"),
             "cargoCacheSha256": labels.get("io.haifa.evals.cargo-cache-sha256"),
-            "offlineDependencySchema": labels.get(
-                "io.haifa.evals.offline-dependency-schema"
-            ),
+            "offlineDependencySchema": labels.get("io.haifa.evals.offline-dependency-schema"),
         },
     }
 
@@ -285,9 +274,7 @@ def _pinned_reference(image: str, inspected: dict[str, Any]) -> str:
     repo_digests = inspected.get("RepoDigests") or []
     repository = image.rsplit(":", 1)[0]
     matching = [
-        reference
-        for reference in repo_digests
-        if str(reference).startswith(f"{repository}@")
+        reference for reference in repo_digests if str(reference).startswith(f"{repository}@")
     ]
     if matching:
         return str(matching[0])
@@ -306,8 +293,7 @@ def _agent_ready_dockerfile(
     include_gradle: bool = False,
 ) -> str:
     workspace = (
-        "RUN find /app -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +\n"
-        "COPY workspace/ /app/\n"
+        "RUN find /app -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +\nCOPY workspace/ /app/\n"
         if replace_workspace
         else ""
     )
@@ -318,7 +304,7 @@ def _agent_ready_dockerfile(
         "RUN if test -f /app/gradlew; then "
         "mv /app/gradlew /app/gradlew.haifa-real && "
         "printf '%s\\n' '#!/usr/bin/env sh' "
-        "'exec \"$(dirname \"$0\")/gradlew.haifa-real\" --offline \"$@\"' "
+        '\'exec "$(dirname "$0")/gradlew.haifa-real" --offline "$@"\' '
         "> /app/gradlew && chmod 0755 /app/gradlew; fi\n"
         if include_gradle
         else ""
@@ -419,9 +405,7 @@ def _cached_task_image(
         image
         for image in inventory
         if any(slug in str(tag) for tag in image.get("RepoTags") or [])
-        and not (image.get("Config", {}).get("Labels") or {}).get(
-            "io.haifa.evals.agent-infra"
-        )
+        and not (image.get("Config", {}).get("Labels") or {}).get("io.haifa.evals.agent-infra")
     ]
     for image in tagged:
         image_id = str(image["Id"])
@@ -457,9 +441,7 @@ def _cached_language_image(
             image
             for image in inventory
             if image.get("Config", {}).get("WorkingDir") == "/app"
-            and not (image.get("Config", {}).get("Labels") or {}).get(
-                "io.haifa.evals.agent-infra"
-            )
+            and not (image.get("Config", {}).get("Labels") or {}).get("io.haifa.evals.agent-infra")
             and signature
             in "\n".join(str(entry.get("created_by", "")) for entry in image.get("History", []))
         ),
@@ -581,13 +563,13 @@ def prepare_task_images(
     infra_reference = _pinned_reference(infra_image, infra_inspected)
     generated_id = f"{config.id}-agent-infra-v4"
     destination = (
-        output
-        or _repository_root()
-        / "work"
-        / "image-cache"
-        / "task-environments"
-        / generated_id
-    ).expanduser().resolve()
+        (
+            output
+            or _repository_root() / "work" / "cache" / "images" / "task-environments" / generated_id
+        )
+        .expanduser()
+        .resolve()
+    )
     if destination.exists():
         config_output = destination / f"{generated_id}.yaml"
         manifest_output = destination / f"{generated_id}.dataset.toml"
@@ -724,7 +706,7 @@ def build_image(
     runtime = _validate_aider_runtime(aider_runtime or _default_aider_runtime())
     repository = _repository_root()
     source = repository / "infra" / "agent-base"
-    context = repository / "work" / "image-cache" / "agent-infra" / "context"
+    context = repository / "work" / "cache" / "images" / "agent-infra" / "context"
     context.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / "Dockerfile", context / "Dockerfile")
     shutil.copy2(source / ".containerignore", context / ".containerignore")

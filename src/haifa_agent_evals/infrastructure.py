@@ -84,9 +84,7 @@ def _job_config(job_name: str, jobs_dir: Path, tasks_path: Path, overlay: Path) 
                 "override_setup_timeout_sec": 60,
             }
         ],
-        "datasets": [
-            {"path": str(tasks_path.resolve()), "task_names": ["harbor-compose-network"]}
-        ],
+        "datasets": [{"path": str(tasks_path.resolve()), "task_names": ["harbor-compose-network"]}],
     }
 
 
@@ -115,7 +113,12 @@ def run_compose_network_preflight(
 
     timestamp = (now or datetime.now(UTC)).astimezone(UTC)
     resolved_work_dir = work_dir or (
-        repository_root() / "work" / "preflight" / f"compose-network-{new_run_id()}"
+        repository_root()
+        / "work"
+        / "runs"
+        / "preflight"
+        / "harbor"
+        / f"compose-network-{new_run_id()}"
     )
     if resolved_work_dir.exists():
         raise ValueError("infrastructure preflight work directory already exists")
@@ -144,9 +147,7 @@ def run_compose_network_preflight(
     )
 
     trial_results = [
-        path
-        for path in resolved_work_dir.glob("*/result.json")
-        if path.parent != resolved_work_dir
+        path for path in resolved_work_dir.glob("*/result.json") if path.parent != resolved_work_dir
     ]
     trial: dict[str, object] = {}
     if len(trial_results) == 1:

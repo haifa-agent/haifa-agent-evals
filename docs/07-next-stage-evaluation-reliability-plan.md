@@ -106,7 +106,7 @@ evals doctor --config evals/coding-smoke-v1.yaml
 每次运行生成一个稳定 `run-id`：
 
 ```text
-work/<eval-id>/<run-id>/
+work/runs/evaluations/<eval-id>/<run-id>/
 reports/<eval-id>/<run-id>/
 ```
 

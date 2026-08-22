@@ -66,7 +66,7 @@ candidates:
 - Haifa 通过一个薄 `BaseInstalledAgent` Adapter 运行当前 CLI JAR；
 - 外部 Candidate 优先使用 Harbor 内置 Agent；
 - Verifier 是唯一正确性来源；
-- 原始 Harbor Jobs 写入 `work/`，不提交 Git。
+- 原始 Harbor Jobs 写入 `work/runs/`，不提交 Git。
 
 Evals 入口只做两件事：把 `eval.yaml` 转为 Harbor Job Config，以及调用 Harbor。它不重新实现 Harbor 的
 调度、超时、并发和恢复。
@@ -122,7 +122,13 @@ haifa-agent-evals/
     evals.ps1
     evals.sh
   tests/
-  work/                 # ignored
+  work/                 # README tracked; runtime contents ignored
+    runs/               # evaluation, calibration and preflight jobs
+    tasks/              # source, selected, derived and prepared tasks
+    cache/              # image contexts and offline dependencies
+    gates/              # admission and infrastructure evidence
+    operations/         # reusable configs, controllers and helper scripts
+    diagnostics/        # probes, verifier smoke jobs and reports
   reports/              # results.csv + comparison.md
   docs/
 ```

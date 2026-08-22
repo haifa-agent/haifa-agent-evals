@@ -3,7 +3,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.pyc
-work/
+work/*
+!work/README.md
 reports/
 run_data/
 *.db
