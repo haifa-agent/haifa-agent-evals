@@ -44,7 +44,7 @@ execution:
   maxTimeoutMillis: 1200000
   maxOutputLines: 2000
   maxOutputBytes: 51200
-  maxProcesses: 8
+  maxProcesses: 32
   inheritEnvironment:
     - PATH
     - JAVA_HOME
