@@ -1,0 +1,73 @@
+models:
+  default: bailian-responses-qwen
+  providers:
+    - id: aliyun-bailian
+      displayName: Alibaba Cloud Bailian
+      endpoint: ${HAIFA_BAILIAN_ENDPOINT}
+      credentialRef: env://DASHSCOPE_API_KEY
+      nativeStreaming: true
+      apiBindings:
+        - style: openai-responses
+          dialect: aliyun-bailian-openai-responses
+      models:
+        - id: bailian-responses-qwen
+          displayName: Qwen 3.7 Max Responses
+          providerModelId: ${HAIFA_BAILIAN_MODEL_ID}
+          style: openai-responses
+          capabilities: [TEXT_CHAT, TOOL_CALLING, STRUCTURED_OUTPUT, REASONING]
+          contextWindow: 1000000
+          maxOutputTokens: 65536
+          reasoningMode: enabled
+
+tools:
+  enabled:
+    - file.list
+    - file.stat
+    - file.read
+    - file.create
+    - file.write
+    - file.patch
+    - file.delete
+    - file.move
+    - execution.run
+
+skills:
+  allowed: []
+
+approval:
+  mode: auto
+
+execution:
+  provider: host-guarded
+  network: allow
+  shell: auto
+  defaultTimeoutMillis: 120000
+  maxTimeoutMillis: 1200000
+  maxOutputLines: 2000
+  maxOutputBytes: 51200
+  maxProcesses: 32
+  inheritEnvironment:
+    - PATH
+    - JAVA_HOME
+    - HOME
+    - LANG
+    - LC_ALL
+    - TMPDIR
+    - TMP
+    - TEMP
+    - GOTMPDIR
+    - GOCACHE
+  extraPathPolicies: []
+
+runtime:
+  maxIterations: 50
+  maxToolCalls: 32
+  maxWallTimeMillis: 1200000
+
+persistence:
+  mode: SQLITE_WITH_JSONL
+  databasePath: /tmp/haifa-runtime.db
+  transcriptRoot: /tmp/haifa-transcripts
+  protection: NONE
+  busyTimeoutMillis: 5000
+  maximumPayloadBytes: 1048576

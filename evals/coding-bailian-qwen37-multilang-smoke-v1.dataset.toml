@@ -1,0 +1,25 @@
+[dataset]
+name = "haifa/coding-bailian-qwen37-multilang-smoke-v1"
+description = "Five-language smoke tasks pinned to the agent-infra-v4 environment"
+authors = []
+keywords = []
+
+[[tasks]]
+name = "aider/polyglot_go_wordy"
+digest = "sha256:e8f5545c00a9f3840aa5c77765417aac57ac3fd474e148496badaa6def6cc7b8"
+
+[[tasks]]
+name = "aider/polyglot_java_circular-buffer"
+digest = "sha256:5883043a67a9f7d3e2e7d88758c0f4d372e1b270d170fa35b32eea3ad42b53e6"
+
+[[tasks]]
+name = "aider/polyglot_javascript_grade-school"
+digest = "sha256:08b4a393feced81f429e87dbddd2e256d43c2186fa6e97debe18f16f05b93245"
+
+[[tasks]]
+name = "aider/polyglot_python_hangman"
+digest = "sha256:19d291491d5a2d6b8ebad8c328717a7fec7848942011c51ad2bfa72528988f63"
+
+[[tasks]]
+name = "aider/polyglot_rust_xorcism"
+digest = "sha256:d344e42e5b8e57510e6a962fec892f7e9bdb501a780b21697c461ff0f44e2d8a"

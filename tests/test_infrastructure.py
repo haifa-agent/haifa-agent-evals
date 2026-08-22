@@ -46,6 +46,7 @@ def test_infrastructure_evidence_must_match_overlay_proxy_backend_and_expiry(
                 "containerBackend": "podman",
                 "networkProbe": {
                     "composeNetworkVerified": True,
+                    "targetHost": "api.deepseek.com",
                     "proxyEndpoint": {
                         "scheme": "http",
                         "host": "host.containers.internal",
@@ -63,6 +64,7 @@ def test_infrastructure_evidence_must_match_overlay_proxy_backend_and_expiry(
         overlay=overlay,
         proxy_url="http://host.containers.internal:22081",
         container_cli="C:/tools/podman.exe",
+        target_url="https://api.deepseek.com/",
         now=now,
     )
 
@@ -75,10 +77,22 @@ def test_infrastructure_evidence_must_match_overlay_proxy_backend_and_expiry(
         overlay=overlay,
         proxy_url="http://host.containers.internal:22081",
         container_cli="podman",
+        target_url="https://api.deepseek.com/",
         now=now + timedelta(minutes=31),
     )
     assert expired is False
     assert detail == "Harbor Compose network preflight evidence has expired"
+
+    mismatch, detail, _ = infrastructure.validate_infrastructure_evidence(
+        evidence,
+        overlay=overlay,
+        proxy_url="http://host.containers.internal:22081",
+        container_cli="podman",
+        target_url="https://workspace-123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+        now=now,
+    )
+    assert mismatch is False
+    assert detail == "preflight target does not match the evaluation provider"
 
 
 def test_proxy_status_recognizes_healthy_external_relay(tmp_path: Path, monkeypatch) -> None:

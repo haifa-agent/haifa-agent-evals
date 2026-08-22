@@ -38,9 +38,28 @@ def _agent_config(candidate: Candidate, timeout_seconds: int) -> dict[str, objec
         result["import_path"] = candidate.agent
     else:
         result["name"] = candidate.agent
-    if candidate.id == "haifa":
+    provider = candidate.resolved_provider()
+    if candidate.id == "haifa" and provider == "deepseek":
         result["env"] = {"DEEPSEEK_API_KEY": "${DEEPSEEK_API_KEY}"}
+    elif candidate.id == "haifa" and provider == "aliyun-bailian":
+        result["env"] = {
+            "DASHSCOPE_API_KEY": "${DASHSCOPE_API_KEY}",
+            "HAIFA_BAILIAN_ENDPOINT": "${HAIFA_BAILIAN_ENDPOINT}",
+            "HAIFA_BAILIAN_MODEL_ID": candidate.model,
+        }
+        result["kwargs"] = {
+            "config_path": str(
+                Path(__file__).resolve().parent
+                / "integrations"
+                / "harbor"
+                / "haifa-eval-bailian-responses.yaml"
+            )
+        }
+    elif candidate.id == "haifa":
+        raise ValueError(f"unsupported Haifa evaluation provider: {provider}")
     elif candidate.id == "aider":
+        if provider != "deepseek":
+            raise ValueError(f"unsupported Aider evaluation provider: {provider}")
         result["env"] = {
             "AIDER_OPENAI_API_BASE": "https://api.deepseek.com",
             "AIDER_DISABLE_PLAYWRIGHT": "true",

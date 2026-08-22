@@ -1,0 +1,15 @@
+id: coding-bailian-qwen37-multilang-smoke-v1
+dataset: haifa/coding-bailian-qwen37-multilang-smoke-v1@sha256:9c322b0594107237245e0ab92c36d9187594a8fb0d9bc234dedf94ae34bda33d
+tasks:
+  - aider/polyglot_go_wordy
+  - aider/polyglot_java_circular-buffer
+  - aider/polyglot_javascript_grade-school
+  - aider/polyglot_python_hangman
+  - aider/polyglot_rust_xorcism
+attempts: 1
+timeoutMinutes: 20
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: qwen3.7-max
+    provider: aliyun-bailian

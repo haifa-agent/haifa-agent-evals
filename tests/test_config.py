@@ -29,6 +29,22 @@ def test_loads_minimal_config(tmp_path: Path) -> None:
     config = load_config(_write(tmp_path, BASE))
     assert config.id == "smoke"
     assert config.tasks == ("task-a", "task-b")
+    assert config.candidates[0].provider is None
+
+
+def test_loads_explicit_candidate_provider(tmp_path: Path) -> None:
+    config = load_config(
+        _write(
+            tmp_path,
+            BASE.replace(
+                "model: provider/model",
+                "model: qwen3.7-max\n    provider: aliyun-bailian",
+            ),
+        )
+    )
+
+    assert config.candidates[0].provider == "aliyun-bailian"
+    assert config.candidates[0].resolved_provider() == "aliyun-bailian"
 
 
 @pytest.mark.parametrize("dataset", ["org/data", "org/data@latest", "org/data@main"])
@@ -80,6 +96,22 @@ def test_checked_in_dataset_manifest_matches_evaluation_config() -> None:
 
     assert manifest.dataset.name == dataset_name
     assert f"sha256:{manifest.compute_content_hash()}" == dataset_ref
+    assert {task.name for task in manifest.tasks} == set(config.tasks)
+
+
+def test_bailian_qwen37_smoke_config_matches_single_task_manifest() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    config = load_config(repository / "evals" / "coding-bailian-qwen37-smoke-v1.yaml")
+    manifest = DatasetManifest.from_toml_file(
+        repository / "evals" / "coding-bailian-qwen37-smoke-v1.dataset.toml"
+    )
+
+    assert config.tasks == ("haifa/coding-smoke-cpp-gigasecond",)
+    assert config.candidates[0].model == "qwen3.7-max"
+    assert config.candidates[0].resolved_provider() == "aliyun-bailian"
+    assert config.dataset == (
+        f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}"
+    )
     assert {task.name for task in manifest.tasks} == set(config.tasks)
 
 

@@ -1,0 +1,13 @@
+# Single-task validation subset derived from coding-smoke-v1.
+
+schema_version = "1.0"
+
+[dataset]
+name = "haifa/coding-bailian-qwen37-smoke-v1"
+description = "Single-task Bailian Qwen 3.7 Max Responses integration validation"
+authors = []
+keywords = ["coding-agent", "bailian", "qwen3.7-max", "responses"]
+
+[[tasks]]
+name = "haifa/coding-smoke-cpp-gigasecond"
+digest = "sha256:6fe9ff5d6211972812479a258d50cdbfb981111bbd374ecc40daa7ce474929e9"

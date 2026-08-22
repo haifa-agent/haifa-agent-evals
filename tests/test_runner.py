@@ -65,6 +65,36 @@ def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:
     assert not any(path.name == "result.json" for path in tmp_path.rglob("result.json"))
 
 
+def test_builds_bailian_haifa_agent_with_separate_config(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="bailian-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent",
+                "qwen3.7-max",
+                "aliyun-bailian",
+            ),
+        ),
+    )
+
+    agent = build_job_config(config, tmp_path)["agents"][0]
+
+    assert agent["model_name"] == "qwen3.7-max"
+    assert agent["env"] == {
+        "DASHSCOPE_API_KEY": "${DASHSCOPE_API_KEY}",
+        "HAIFA_BAILIAN_ENDPOINT": "${HAIFA_BAILIAN_ENDPOINT}",
+        "HAIFA_BAILIAN_MODEL_ID": "qwen3.7-max",
+    }
+    assert str(agent["kwargs"]["config_path"]).endswith(
+        "haifa-eval-bailian-responses.yaml"
+    )
+
+
 def test_uses_complete_local_task_cache(tmp_path: Path, monkeypatch) -> None:
     tasks = tmp_path / "selected-tasks"
     (tasks / "task-a").mkdir(parents=True)

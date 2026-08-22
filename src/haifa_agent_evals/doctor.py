@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from haifa_agent_evals.config import EvaluationConfig
 from haifa_agent_evals.dataset import dataset_manifest_path, validate_local_dataset
@@ -22,6 +24,7 @@ from haifa_agent_evals.runner import _default_haifa_jar
 
 EXPECTED_HARBOR_VERSION = "0.20.0"
 MINIMUM_FREE_BYTES = 5 * 1024 * 1024 * 1024
+_DEEPSEEK_TARGET = "https://api.deepseek.com/"
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,73 @@ def _default_probe(command: Sequence[str]) -> bool:
     except (OSError, subprocess.TimeoutExpired):
         return False
     return completed.returncode == 0
+
+
+def _provider_requirements(
+    config: EvaluationConfig, environment: Mapping[str, str]
+) -> tuple[set[str], str | None, DoctorCheck]:
+    providers = {
+        provider
+        for candidate in config.candidates
+        if (provider := candidate.resolved_provider()) is not None
+    }
+    required_credentials: set[str] = set()
+    targets: set[str] = set()
+    if "deepseek" in providers:
+        required_credentials.add("DEEPSEEK_API_KEY")
+        targets.add(_DEEPSEEK_TARGET)
+    if "aliyun-bailian" in providers:
+        required_credentials.add("DASHSCOPE_API_KEY")
+        endpoint = environment.get("HAIFA_BAILIAN_ENDPOINT", "").strip()
+        parsed = urlsplit(endpoint)
+        host = parsed.hostname or ""
+        valid = (
+            parsed.scheme == "https"
+            and re.fullmatch(r"[a-z0-9-]+\.[a-z0-9-]+\.maas\.aliyuncs\.com", host)
+            is not None
+            and parsed.path.rstrip("/") == "/compatible-mode/v1"
+            and not parsed.username
+            and not parsed.password
+            and not parsed.query
+            and not parsed.fragment
+        )
+        if not valid:
+            return (
+                required_credentials,
+                None,
+                DoctorCheck(
+                    "provider-config",
+                    "FAIL",
+                    "HAIFA_BAILIAN_ENDPOINT must be a clean workspace-scoped HTTPS endpoint",
+                ),
+            )
+        targets.add(endpoint)
+    unsupported = sorted(providers - {"deepseek", "aliyun-bailian"})
+    if unsupported:
+        return (
+            required_credentials,
+            None,
+            DoctorCheck(
+                "provider-config",
+                "FAIL",
+                f"unsupported evaluation providers: {', '.join(unsupported)}",
+            ),
+        )
+    if len(targets) > 1:
+        return (
+            required_credentials,
+            None,
+            DoctorCheck(
+                "provider-config",
+                "FAIL",
+                "one evaluation config cannot share one network preflight across provider hosts",
+            ),
+        )
+    return (
+        required_credentials,
+        next(iter(targets), None),
+        DoctorCheck("provider-config", "PASS", "provider configuration is valid"),
+    )
 
 
 def _admission_check(path: Path, config: EvaluationConfig) -> tuple[DoctorCheck, str | None]:
@@ -105,6 +175,10 @@ def doctor(
     checks: list[DoctorCheck] = []
     current_environment = environment or os.environ
     infrastructure_evidence_digest: str | None = None
+    required_credentials, provider_target, provider_check = _provider_requirements(
+        config, current_environment
+    )
+    checks.append(provider_check)
     admission_check, admission_digest = _admission_check(admission_path, config)
     checks.append(admission_check)
 
@@ -155,11 +229,6 @@ def doctor(
     else:
         checks.append(DoctorCheck("haifa-jar", "SKIP", "evaluation has no Haifa candidate"))
 
-    required_credentials = (
-        {"DEEPSEEK_API_KEY"}
-        if any(candidate.id in {"haifa", "aider"} for candidate in config.candidates)
-        else set()
-    )
     missing_credentials = sorted(
         name for name in required_credentials if not current_environment.get(name)
     )
@@ -204,6 +273,7 @@ def doctor(
                 overlay=overlay,
                 proxy_url=proxy_url,
                 container_cli=resolved_container or "unavailable",
+                target_url=provider_target,
             )
             checks.append(
                 DoctorCheck("harbor-compose-network", "PASS" if ok else "FAIL", detail)

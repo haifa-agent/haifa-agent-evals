@@ -194,6 +194,7 @@ def validate_infrastructure_evidence(
     overlay: Path,
     proxy_url: str,
     container_cli: str,
+    target_url: str | None = None,
     now: datetime | None = None,
 ) -> tuple[bool, str, str | None]:
     if not path.is_file():
@@ -207,6 +208,8 @@ def validate_infrastructure_evidence(
     probe = evidence.get("networkProbe")
     if not isinstance(probe, dict) or probe.get("composeNetworkVerified") is not True:
         return False, "evidence did not verify the Harbor Compose network", None
+    if target_url is not None and probe.get("targetHost") != _target_host(target_url):
+        return False, "preflight target does not match the evaluation provider", None
     if not overlay.is_file() or probe.get("overlaySha256") != _sha256(overlay):
         return False, "Compose overlay does not match preflight evidence", None
     try:

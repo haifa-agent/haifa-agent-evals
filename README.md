@@ -175,6 +175,21 @@ uv run evals run --config <eval.yaml> --tasks-path <tasks> --admission <admissio
 平台探测会在环境启动前失败。因此 v4 已保证依赖客户端离线和依赖缓存完整，但尚未声称强制阻断容器
 全部直接 egress；升级或修复 Harbor/Podman 兼容后应再启用 verifier phase 的网络隔离。
 
+百炼 Responses 评测使用独立的 `haifa-eval-bailian-responses.yaml`，不会改变 DeepSeek Trial 的冻结配置。
+Key 和 workspace endpoint 只通过当前进程环境注入；网络预检必须显式探测同一个 workspace endpoint：
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<injected-secret>"
+$env:HAIFA_BAILIAN_ENDPOINT = "https://<workspace-id>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+uv run evals infra check `
+  --target-url "$env:HAIFA_BAILIAN_ENDPOINT" `
+  --output work/gates/infrastructure/coding-bailian-qwen37-smoke-v1-network.json
+$tasks = "work/cache/images/task-environments/coding-smoke-v1-agent-infra-v4-final/tasks"
+uv run evals run --config evals/coding-bailian-qwen37-smoke-v1.yaml --tasks-path $tasks --container-cli podman
+```
+
+不要把 API Key、workspace endpoint 或 `ss-bailian.txt` 写入 eval 配置、报告或提交记录。
+
 这样 Harbor 会使用每道题的预构建 RepoDigest，跳过 Dockerfile 构建；Haifa 与 Aider adapter 随后分别验证 Java 21 和 Aider 0.86.2 并跳过大体积安装。
 
 每个 Haifa Trial 都启用 `SQLITE_WITH_JSONL`。运行期间 SQLite 和 transcript JSONL 写入 Container

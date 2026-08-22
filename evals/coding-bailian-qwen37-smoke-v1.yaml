@@ -1,0 +1,11 @@
+id: coding-bailian-qwen37-smoke-v1
+dataset: haifa/coding-bailian-qwen37-smoke-v1@sha256:0ae51e1906ffdcc5b2f120d272e0fcd88fd6b8922b9f1b9c16a6afbba547b7fa
+tasks:
+  - haifa/coding-smoke-cpp-gigasecond
+attempts: 1
+timeoutMinutes: 20
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: qwen3.7-max
+    provider: aliyun-bailian

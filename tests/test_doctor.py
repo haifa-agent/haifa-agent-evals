@@ -81,6 +81,53 @@ def test_doctor_reports_ready_without_exposing_credentials(tmp_path: Path, monke
     assert result["admissionSha256"]
 
 
+def test_doctor_accepts_bailian_provider_without_exposing_endpoint(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base, tasks_path, admission_path = _fixture(tmp_path, monkeypatch)
+    config = EvaluationConfig(
+        id=base.id,
+        dataset=base.dataset,
+        tasks=base.tasks,
+        attempts=base.attempts,
+        timeout_minutes=base.timeout_minutes,
+        candidates=(
+            Candidate(
+                "haifa",
+                "package:Haifa",
+                "qwen3.7-max",
+                "aliyun-bailian",
+            ),
+        ),
+    )
+    jar = tmp_path / "agent.jar"
+    jar.write_bytes(b"fake jar")
+    output = tmp_path / "preflight.json"
+    endpoint = "https://workspace-123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+
+    result = doctor(
+        config,
+        tasks_path,
+        admission_path,
+        output,
+        jar_path=jar,
+        container_cli="podman",
+        environment={
+            "DASHSCOPE_API_KEY": "bailian-secret",
+            "HAIFA_BAILIAN_ENDPOINT": endpoint,
+        },
+        command_probe=lambda command: True,
+        which=lambda command: command,
+        free_bytes=MINIMUM_FREE_BYTES,
+        harbor_version="0.20.0",
+    )
+
+    assert result["status"] == "READY"
+    rendered = output.read_text(encoding="utf-8")
+    assert "bailian-secret" not in rendered
+    assert "workspace-123" not in rendered
+
+
 def test_doctor_blocks_missing_admission_credential_and_container(
     tmp_path: Path, monkeypatch
 ) -> None:

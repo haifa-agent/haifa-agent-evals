@@ -7,7 +7,7 @@ from typing import Any
 import yaml
 
 _EVAL_FIELDS = {"id", "dataset", "tasks", "attempts", "timeoutMinutes", "candidates"}
-_CANDIDATE_FIELDS = {"id", "agent", "model"}
+_CANDIDATE_FIELDS = {"id", "agent", "model", "provider"}
 _FLOATING_DATASET_REFS = {"latest", "main", "head"}
 _SAFE_ID_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
 
@@ -17,6 +17,14 @@ class Candidate:
     id: str
     agent: str
     model: str
+    provider: str | None = None
+
+    def resolved_provider(self) -> str | None:
+        if self.provider is not None:
+            return self.provider
+        if self.id in {"haifa", "aider"}:
+            return "deepseek"
+        return None
 
 
 @dataclass(frozen=True)
@@ -80,7 +88,7 @@ def load_config(path: Path) -> EvaluationConfig:
     for index, value in enumerate(candidate_values):
         candidate = _mapping(value, f"candidate[{index}]")
         candidate_unknown = set(candidate) - _CANDIDATE_FIELDS
-        candidate_missing = _CANDIDATE_FIELDS - set(candidate)
+        candidate_missing = {"id", "agent", "model"} - set(candidate)
         if candidate_unknown:
             raise ValueError(f"unknown candidate fields: {', '.join(sorted(candidate_unknown))}")
         if candidate_missing:
@@ -90,6 +98,11 @@ def load_config(path: Path) -> EvaluationConfig:
                 id=_safe_id(candidate["id"], "candidate id"),
                 agent=_required_string(candidate["agent"], "candidate agent"),
                 model=_required_string(candidate["model"], "candidate model"),
+                provider=(
+                    _safe_id(candidate["provider"], "candidate provider")
+                    if "provider" in candidate
+                    else None
+                ),
             )
         )
     candidate_ids = [candidate.id for candidate in candidates]
