@@ -1,4 +1,5 @@
 import json
+import os
 from hashlib import sha256
 from pathlib import Path
 
@@ -197,6 +198,30 @@ def test_child_environment_forces_utf8_for_harbor_output(tmp_path: Path, monkeyp
 
     assert environment["PYTHONUTF8"] == "1"
     assert environment["PYTHONIOENCODING"] == "utf-8"
+
+
+def test_child_environment_forces_explicit_podman_even_when_docker_exists(
+    tmp_path: Path, monkeypatch
+) -> None:
+    podman = tmp_path / "podman.exe"
+    docker = tmp_path / "real-docker.exe"
+    podman.write_bytes(b"podman")
+    docker.write_bytes(b"docker")
+
+    def which(command: str | None, **_kwargs: object) -> str | None:
+        if command == "podman":
+            return str(podman)
+        if command == "docker":
+            return str(docker)
+        return None
+
+    monkeypatch.setattr("haifa_agent_evals.runner.shutil.which", which)
+
+    environment = _child_environment(tmp_path / "job", "podman")
+
+    wrapper = tmp_path / ".tooling" / "docker.exe"
+    assert wrapper.read_bytes() == b"podman"
+    assert environment["PATH"].split(os.pathsep, 1)[0] == str(wrapper.parent)
 
 
 def test_checked_in_aider_route_survives_harbor_provider_split(tmp_path: Path) -> None:

@@ -74,7 +74,7 @@ def test_doctor_reports_ready_without_exposing_credentials(tmp_path: Path, monke
     )
 
     assert result["status"] == "READY"
-    assert {check["status"] for check in result["checks"]} == {"PASS"}
+    assert {check["status"] for check in result["checks"]} == {"PASS", "SKIP"}
     text = output.read_text(encoding="utf-8")
     assert "secret-value" not in text
     assert str(tmp_path) not in text
@@ -131,3 +131,38 @@ def test_doctor_blocks_admission_for_a_different_task_set(tmp_path: Path, monkey
     assert result["status"] == "BLOCKED"
     admission_check = next(check for check in result["checks"] if check["name"] == "admission")
     assert admission_check["detail"] == "admission task set does not match"
+
+
+def test_doctor_blocks_proxy_run_without_harbor_compose_evidence(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config, tasks_path, admission_path = _fixture(tmp_path, monkeypatch)
+    overlay = tmp_path / "proxy.compose.yaml"
+    overlay.write_text("services: {}\n", encoding="utf-8")
+    jar = tmp_path / "agent.jar"
+    jar.write_bytes(b"fake jar")
+
+    result = doctor(
+        config,
+        tasks_path,
+        admission_path,
+        tmp_path / "preflight.json",
+        jar_path=jar,
+        container_cli="podman",
+        environment={
+            "DEEPSEEK_API_KEY": "present",
+            "HAIFA_EVAL_EXTRA_DOCKER_COMPOSE": str(overlay),
+            "HAIFA_EVALS_CONTAINER_PROXY": "http://host.containers.internal:22081",
+        },
+        command_probe=lambda command: True,
+        which=lambda command: command,
+        free_bytes=MINIMUM_FREE_BYTES,
+        harbor_version="0.20.0",
+    )
+
+    assert result["status"] == "BLOCKED"
+    network = next(
+        check for check in result["checks"] if check["name"] == "harbor-compose-network"
+    )
+    assert network["status"] == "FAIL"
+    assert "evidence is required" in network["detail"]

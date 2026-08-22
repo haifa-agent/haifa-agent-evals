@@ -17,7 +17,10 @@ from harbor.publisher.packager import Packager
 
 from haifa_agent_evals.config import EvaluationConfig, load_config
 
-DEFAULT_IMAGE = "localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-gradle8.7-v3"
+DEFAULT_IMAGE = (
+    "localhost/haifa-agent-evals/agent-infra:"
+    "jammy-jdk21-aider0.86.2-offline-deps-v4"
+)
 JDK_SHA256 = "f2dc5418092c43003db8f9005c4a286e1c0104fea96ccdd49e8ebd037cac9219"
 GRADLE_SHA256 = "544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d"
 _AIDER_TOOL_PATH = Path("root/.local/share/uv/tools/aider-chat")
@@ -110,6 +113,44 @@ def _gradle_dependency_cache() -> Path:
     available = {candidate.name for candidate in path.rglob("*.jar")} if path.is_dir() else set()
     if not required_jars <= available:
         raise ValueError("Gradle dependency cache is incomplete")
+    return path
+
+
+def _python_wheelhouse() -> Path:
+    configured = os.environ.get("HAIFA_EVAL_PYTHON_WHEELHOUSE_PATH")
+    candidates = [
+        Path(configured) if configured else None,
+        _repository_root() / "work" / "image-cache" / "python" / "wheels",
+        _repository_root() / "work" / "pip-wheels",
+    ]
+    for candidate in candidates:
+        if candidate and candidate.is_dir() and any(candidate.glob("*.whl")):
+            return candidate.expanduser().resolve()
+    raise ValueError(
+        "Python wheelhouse is missing; populate work/image-cache/python/wheels before build"
+    )
+
+
+def _cargo_home() -> Path:
+    configured = os.environ.get("HAIFA_EVAL_CARGO_HOME_PATH")
+    path = (
+        Path(configured)
+        if configured
+        else _repository_root() / "work" / "image-cache" / "cargo"
+    ).expanduser().resolve()
+    cache = path / "registry" / "cache"
+    inventory = path / "cache-manifest.json"
+    if not cache.is_dir() or not inventory.is_file():
+        raise ValueError(
+            "Cargo cache inventory is missing; populate work/image-cache/cargo before build"
+        )
+    try:
+        payload = json.loads(inventory.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("Cargo cache inventory is unreadable") from error
+    crate_count = len(list(cache.rglob("*.crate")))
+    if payload.get("schemaVersion") != 1 or payload.get("crateCount") != crate_count:
+        raise ValueError("Cargo cache inventory does not match cached crate files")
     return path
 
 
@@ -229,6 +270,13 @@ def _lock_payload(image: str, inspected: dict[str, Any]) -> dict[str, Any]:
             "gradleDependencyCacheSha256": labels.get(
                 "io.haifa.evals.gradle-cache-sha256"
             ),
+            "pythonWheelhouseSha256": labels.get(
+                "io.haifa.evals.python-wheelhouse-sha256"
+            ),
+            "cargoCacheSha256": labels.get("io.haifa.evals.cargo-cache-sha256"),
+            "offlineDependencySchema": labels.get(
+                "io.haifa.evals.offline-dependency-schema"
+            ),
         },
     }
 
@@ -267,6 +315,11 @@ def _agent_ready_dockerfile(
         "COPY --from=haifa_agent_infra /root/.gradle/wrapper /root/.gradle/wrapper\n"
         "COPY --from=haifa_agent_infra /root/.gradle/caches/modules-2 "
         "/root/.gradle/caches/modules-2\n"
+        "RUN if test -f /app/gradlew; then "
+        "mv /app/gradlew /app/gradlew.haifa-real && "
+        "printf '%s\\n' '#!/usr/bin/env sh' "
+        "'exec \"$(dirname \"$0\")/gradlew.haifa-real\" --offline \"$@\"' "
+        "> /app/gradlew && chmod 0755 /app/gradlew; fi\n"
         if include_gradle
         else ""
     )
@@ -282,6 +335,9 @@ def _agent_ready_dockerfile(
         "COPY --from=haifa_agent_infra "
         "/root/.local/share/uv/python/cpython-3.12.8-linux-x86_64-gnu "
         "/root/.local/share/uv/python/cpython-3.12.8-linux-x86_64-gnu\n"
+        "COPY --from=haifa_agent_infra /opt/haifa/offline/python-wheels "
+        "/opt/haifa/offline/python-wheels\n"
+        "COPY --from=haifa_agent_infra /root/.cargo /root/.cargo\n"
         f"{gradle}"
         "RUN install -d -m 0755 /root/.local/bin && "
         "ln -sf /root/.local/share/uv/tools/aider-chat/bin/aider "
@@ -289,8 +345,11 @@ def _agent_ready_dockerfile(
         "printf '%s\\n' 'export PATH=\"$HOME/.local/bin:$PATH\"' "
         "> /root/.local/bin/env && chmod 0644 /root/.local/bin/env\n"
         "ENV JAVA_HOME=/opt/haifa/java\n"
+        "ENV PIP_NO_INDEX=1\n"
+        "ENV PIP_FIND_LINKS=/opt/haifa/offline/python-wheels\n"
+        "ENV CARGO_NET_OFFLINE=true\n"
         "ENV PATH=/opt/haifa/java/bin:/root/.local/bin:${PATH}\n"
-        'LABEL io.haifa.evals.agent-infra="jammy-jdk21-aider0.86.2-gradle8.7-v3"\n'
+        'LABEL io.haifa.evals.agent-infra="jammy-jdk21-aider0.86.2-offline-deps-v4"\n'
     )
 
 
@@ -360,6 +419,9 @@ def _cached_task_image(
         image
         for image in inventory
         if any(slug in str(tag) for tag in image.get("RepoTags") or [])
+        and not (image.get("Config", {}).get("Labels") or {}).get(
+            "io.haifa.evals.agent-infra"
+        )
     ]
     for image in tagged:
         image_id = str(image["Id"])
@@ -395,9 +457,8 @@ def _cached_language_image(
             image
             for image in inventory
             if image.get("Config", {}).get("WorkingDir") == "/app"
-            and any(
-                "localhost/haifa-agent-evals/source-task-" in str(tag)
-                for tag in image.get("RepoTags") or []
+            and not (image.get("Config", {}).get("Labels") or {}).get(
+                "io.haifa.evals.agent-infra"
             )
             and signature
             in "\n".join(str(entry.get("created_by", "")) for entry in image.get("History", []))
@@ -442,10 +503,42 @@ def _image_inventory(cli: str) -> list[dict[str, Any]]:
 def _task_with_prebuilt_image(task_toml: str, image_reference: str) -> str:
     if re.search(r"(?m)^docker_image\s*=", task_toml):
         raise ValueError("task already declares docker_image")
-    marker = "[environment]"
-    if marker not in task_toml:
+    environment_marker = "[environment]"
+    verifier_env_marker = "[verifier.env]"
+    if environment_marker not in task_toml:
         raise ValueError("task.toml has no [environment] section")
-    return task_toml.replace(marker, f'{marker}\ndocker_image = "{image_reference}"', 1)
+    if verifier_env_marker not in task_toml:
+        raise ValueError("task.toml has no [verifier.env] section")
+    generated = task_toml.replace(
+        environment_marker,
+        f'{environment_marker}\ndocker_image = "{image_reference}"',
+        1,
+    )
+    return generated.replace(
+        verifier_env_marker,
+        (
+            f'{verifier_env_marker}\nPIP_NO_INDEX = "1"\n'
+            'PIP_FIND_LINKS = "/opt/haifa/offline/python-wheels"\n'
+            'CARGO_NET_OFFLINE = "true"\n'
+            'GRADLE_OPTS = "-Dorg.gradle.daemon=false"'
+        ),
+        1,
+    )
+
+
+def _require_offline_dependency_labels(inspected: dict[str, Any]) -> None:
+    config = inspected.get("Config") if isinstance(inspected.get("Config"), dict) else {}
+    labels = config.get("Labels") if isinstance(config.get("Labels"), dict) else {}
+    required = {
+        "io.haifa.evals.gradle-cache-sha256",
+        "io.haifa.evals.python-wheelhouse-sha256",
+        "io.haifa.evals.cargo-cache-sha256",
+    }
+    missing = sorted(label for label in required if not labels.get(label))
+    if labels.get("io.haifa.evals.offline-dependency-schema") != "1" or missing:
+        raise ValueError(
+            "infrastructure image does not contain the required offline dependency caches"
+        )
 
 
 def _generated_evaluation_config(
@@ -484,8 +577,9 @@ def prepare_task_images(
 
     cli = _container_cli(container_cli)
     infra_inspected = _inspect(cli, infra_image)
+    _require_offline_dependency_labels(infra_inspected)
     infra_reference = _pinned_reference(infra_image, infra_inspected)
-    generated_id = f"{config.id}-agent-infra-v3"
+    generated_id = f"{config.id}-agent-infra-v4"
     destination = (
         output
         or _repository_root()
@@ -582,7 +676,7 @@ def prepare_task_images(
         images.append({"task": task_name, "image": image_reference, "digest": task_digest})
 
     source_dataset_name = config.dataset.rsplit("@", 1)[0]
-    dataset_name = f"{source_dataset_name}-agent-infra-v3"
+    dataset_name = f"{source_dataset_name}-agent-infra-v4"
     manifest = DatasetManifest(
         dataset=DatasetInfo(
             name=dataset_name,
@@ -625,6 +719,8 @@ def build_image(
     archive = _java_archive(java_archive)
     gradle_archive = _gradle_archive()
     gradle_cache = _gradle_dependency_cache()
+    wheelhouse = _python_wheelhouse()
+    cargo_home = _cargo_home()
     runtime = _validate_aider_runtime(aider_runtime or _default_aider_runtime())
     repository = _repository_root()
     source = repository / "infra" / "agent-base"
@@ -652,6 +748,20 @@ def build_image(
         ignore=shutil.ignore_patterns("*.lock", "gc.properties"),
     )
     gradle_cache_hash = _host_tree_hash(cached_gradle_modules)
+    cached_wheelhouse = context / "python-wheels"
+    if cached_wheelhouse.exists():
+        shutil.rmtree(cached_wheelhouse)
+    shutil.copytree(wheelhouse, cached_wheelhouse)
+    wheelhouse_hash = _host_tree_hash(cached_wheelhouse)
+    cached_cargo = context / "cargo"
+    if cached_cargo.exists():
+        shutil.rmtree(cached_cargo)
+    shutil.copytree(
+        cargo_home,
+        cached_cargo,
+        ignore=shutil.ignore_patterns("*.lock", ".package-cache", ".package-cache-mutate"),
+    )
+    cargo_hash = _host_tree_hash(cached_cargo)
 
     subprocess.run(  # noqa: S603
         [
@@ -662,6 +772,10 @@ def build_image(
             image,
             "--build-arg",
             f"GRADLE_CACHE_SHA256={gradle_cache_hash}",
+            "--build-arg",
+            f"PYTHON_WHEELHOUSE_SHA256={wheelhouse_hash}",
+            "--build-arg",
+            f"CARGO_CACHE_SHA256={cargo_hash}",
             "--file",
             str(context / "Dockerfile"),
             str(context),
@@ -697,6 +811,10 @@ def inspect_image(
             "bhs2wmbdwecv87pi65oeuq5iu/gradle-8.7-bin.zip; "
             "find /root/.gradle/caches/modules-2 -name 'byte-buddy-1.14.11.jar' "
             "-type f | grep -q .; "
+            "find /opt/haifa/offline/python-wheels -name '*.whl' -type f | grep -q .; "
+            "test -r /root/.cargo/cache-manifest.json; "
+            "test \"$PIP_NO_INDEX\" = '1'; "
+            "test \"$CARGO_NET_OFFLINE\" = 'true'; "
             "printf 'agent infrastructure image smoke: PASS\\n'"
         )
         subprocess.run(  # noqa: S603

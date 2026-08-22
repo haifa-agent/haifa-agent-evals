@@ -1,7 +1,7 @@
 # 评测基础设施改进优先级
 
-> 状态：Implemented in current branch; real-environment acceptance pending
-> 日期：2026-08-21
+> 状态：Implemented; offline-dependency v4 and real Harbor Compose preflight accepted locally
+> 日期：2026-08-22
 > 输入：`coding-polyglot-30-v1` 首轮真实评测、Python/Rust 专项复盘与完整轨迹归档
 > 既有实施计划（执行时按本文优先级重排）：[`07-next-stage-evaluation-reliability-plan.md`](07-next-stage-evaluation-reliability-plan.md)
 
@@ -167,6 +167,46 @@ Manifest 只记录运行溯源，不定义第二套 Trial/Result Schema；不得
 
 Candidate FAIL 不应让收尾程序崩溃；证据缺失或矩阵不完整必须让 `finalize` 非零退出。
 
+### 5.4 正式 Trial 的依赖必须离线可得
+
+评测允许 Candidate 调用模型 API，但 Python、Rust 和 Java Verifier 不应在 Trial 中临时下载构建依赖。
+环境准备阶段新增一份 v4 离线依赖契约：
+
+- Python wheelhouse、Cargo registry cache 和 Gradle wrapper/modules cache 在 `image build` 阶段复制；
+- 三类缓存都计算 tree digest，并写入 image label 与 `image-lock.json`；
+- `prepare-tasks` 拒绝没有完整离线缓存标签的基础镜像，并产生新的 Task/Dataset digest；
+- Python 强制 `PIP_NO_INDEX`，Cargo 强制 `CARGO_NET_OFFLINE`，Gradle Wrapper 强制追加 `--offline`；
+- 当前 Rust 题集无外部 crate 时允许用清单明确记录 `crateCount=0`，但清单与实际 `.crate` 数量必须一致。
+
+缓存准备属于显式 `image build/prepare-tasks`，不能由 `doctor` 或正式 Trial 隐式下载。缺依赖应在校准
+或 verifier 启动时快速失败，不应等待公网超时。
+
+### 5.5 网络预检必须来自真实 Harbor Compose
+
+新增零模型基础设施 Task `haifa/harbor-compose-network-preflight`。它通过 Oracle 在 Harbor 创建的实际
+Compose `main` 服务中验证：
+
+- 指定 overlay 确实注入了代理和 preflight marker；
+- 容器通过该代理能够与模型服务入口完成 HTTP/TLS 往返；
+- Trial 唯一、无 exception 且 Harbor reward 为 1。
+
+成功证据只在 30 分钟内有效，并固定 overlay digest、代理端点、容器后端和 preflight Task digest。
+配置 `HAIFA_EVAL_EXTRA_DOCKER_COMPOSE` 后，`doctor/run` 没有匹配证据就直接 BLOCKED。普通
+`podman run` 只能用于诊断，不能再作为正式网络准入证据。
+
+### 5.6 统一 Windows 到 Podman VM 的代理 relay
+
+`evals infra proxy start/status/stop` 管理固定三段链路：Windows proxy、SSH reverse tunnel、VM TCP
+relay。入口先做端口健康检查：
+
+- 三段都健康则复用，不启动重复 relay；
+- 仅部分端口健康则拒绝自动覆盖，要求先排查未知进程；
+- 由工具创建的进程写入忽略目录中的 state，`stop` 只停止自己管理的进程；
+- 外部已存在的健康 relay 可被采用，但不会被工具擅自停止。
+
+最终准入不信任端口检查本身，仍以真实 Harbor Compose preflight 为准。因此 Windows、VM 或容器任一
+段连接失败，都会在模型调用前返回 BLOCKED，而不是等到 Candidate 或 Verifier 超时。
+
 ## 6. P1：Attempt、轨迹与公平性
 
 ### 6.1 保全每次 Attempt
@@ -279,13 +319,22 @@ SQLite 仍是 Haifa 运行事实源，JSONL 是便于交换和查看的投影。
 
 ## 13. 当前实现状态
 
-截至 2026-08-21，本文的三个 Phase 已在当前特性分支实现：
+截至 2026-08-22，本文的三个 Phase 与环境加固已实现：
 
 - `admit`：冻结 Dataset/Task digest 与唯一 Oracle PASS、NOP 可信 FAIL 门禁；
 - `doctor`：准入、Dataset、Harbor、Container、JAR、Credential 存在性、磁盘和 Python 的只读检查；
 - `run`：唯一 Run ID、不可覆盖控制文件和配置/Dataset/Task/JAR/preflight 指纹；
 - `collect/report`：计划矩阵完整性、官方成绩与有效性/干净完成分层、可识别 Verifier 测试数量；
 - `finalize`：私有 Harbor Job 归档、SQLite/Trace/Transcript 校验、安全扫描和 SHA-256 清单。
+- `image build/prepare-tasks`：v4 离线 wheel/Cargo/Gradle 缓存、cache digest 与依赖客户端离线门禁；
+- `infra proxy`：Windows 到 Podman VM/Container 的统一 relay 健康检查和受控生命周期；
+- `infra check`：真实 Harbor Compose、零模型网络预检与 30 分钟证据；
+- `doctor/run`：配置 Compose overlay 后强制验证匹配的基础设施证据。
 
-自动化离线验收已完成。仍需在下一次正式评测前完成两项真实环境验收：为目标 Dataset 生成新的
-Oracle/NOP 准入证据；在实际 Docker/Podman 后端上运行 1～2 题，确认 Container 清理和最终归档。
+本地真实环境已完成 v4 image smoke、6 种语言 Task 镜像生成以及 Harbor Compose preflight（1/1、
+reward 1、0 exception）。仍需为正式目标 Dataset 生成 Oracle/NOP 准入证据并完成计分 Trial。
+
+已知限制：Harbor 0.20 在 Windows Podman compatibility wrapper 下启用 phase
+`network_mode=no-network` 时，使用 Docker 模板读取平台会失败。当前实现保证依赖缓存完整且依赖客户端
+离线，但不宣称已从网络层强制阻断所有直接 egress；修复该兼容点后再增加 verifier phase 网络隔离，
+不能用会让环境启动失败的 sidecar 冒充安全增强。

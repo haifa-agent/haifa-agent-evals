@@ -1,0 +1,1 @@
+The task uses a digest-pinned docker_image; this file keeps Harbor's required environment directory.

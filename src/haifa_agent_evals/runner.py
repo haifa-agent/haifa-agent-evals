@@ -125,7 +125,7 @@ def config_sha256(config: EvaluationConfig) -> str:
     return sha256(payload.encode()).hexdigest()
 
 
-def _child_environment(work_dir: Path) -> dict[str, str]:
+def _child_environment(work_dir: Path, container_cli: str | None = None) -> dict[str, str]:
     environment = os.environ.copy()
     # Harbor renders Unicode summary tables after a job. Force UTF-8 for the
     # child process so a successful Windows run cannot fail on a legacy code page.
@@ -133,8 +133,18 @@ def _child_environment(work_dir: Path) -> dict[str, str]:
     environment["PYTHONIOENCODING"] = "utf-8"
     if "DEEPSEEK_API_KEY" in environment:
         environment.setdefault("OPENAI_API_KEY", environment["DEEPSEEK_API_KEY"])
-    podman = shutil.which("podman", path=environment.get("PATH"))
-    if shutil.which("docker", path=environment.get("PATH")) is None and podman:
+    configured = (
+        shutil.which(container_cli, path=environment.get("PATH")) if container_cli else None
+    )
+    if container_cli and configured is None:
+        raise ValueError(f"container CLI is unavailable: {container_cli}")
+    podman = (
+        configured
+        if configured and Path(configured).stem.lower() == "podman"
+        else shutil.which("podman", path=environment.get("PATH"))
+    )
+    force_podman = bool(configured and Path(configured).stem.lower() == "podman")
+    if podman and (force_podman or shutil.which("docker", path=environment.get("PATH")) is None):
         tooling_dir = work_dir.parent / ".tooling"
         tooling_dir.mkdir(parents=True, exist_ok=True)
         wrapper = tooling_dir / "docker.exe"
@@ -173,6 +183,7 @@ def _write_inputs(
     jar_path: Path | None = None,
     admission_path: Path | None = None,
     preflight_path: Path | None = None,
+    infrastructure_evidence_path: Path | None = None,
 ) -> tuple[Path, Path]:
     if work_dir.exists():
         raise ValueError("run directory already exists; choose a new run id")
@@ -244,6 +255,11 @@ def _write_inputs(
         ),
         "admissionSha256": _file_sha256(admission_path) if admission_path else None,
         "preflightSha256": _file_sha256(preflight_path) if preflight_path else None,
+        "infrastructureEvidenceSha256": (
+            _file_sha256(infrastructure_evidence_path)
+            if infrastructure_evidence_path
+            else None
+        ),
         "harborJobConfigSha256": _file_sha256(job_config_path),
         "extraDockerComposeSha256": (
             _file_sha256(extra_docker_compose) if extra_docker_compose else None
@@ -271,6 +287,8 @@ def run(
     jar_path: Path | None = None,
     admission_path: Path | None = None,
     preflight_path: Path | None = None,
+    infrastructure_evidence_path: Path | None = None,
+    container_cli: str | None = None,
 ) -> Path:
     plan_path, manifest_path = _write_inputs(
         config,
@@ -279,10 +297,11 @@ def run(
         jar_path,
         admission_path,
         preflight_path,
+        infrastructure_evidence_path,
     )
     if not plan_only:
         try:
-            environment = _child_environment(work_dir)
+            environment = _child_environment(work_dir, container_cli)
             if any(candidate.id == "haifa" for candidate in config.candidates):
                 if jar_path is not None:
                     environment["HAIFA_EVAL_JAR_PATH"] = str(jar_path)

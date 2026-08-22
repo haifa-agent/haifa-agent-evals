@@ -13,6 +13,11 @@ from pathlib import Path
 
 from haifa_agent_evals.config import EvaluationConfig
 from haifa_agent_evals.dataset import dataset_manifest_path, validate_local_dataset
+from haifa_agent_evals.infrastructure import (
+    CONTAINER_PROXY_ENV,
+    INFRA_EVIDENCE_ENV,
+    validate_infrastructure_evidence,
+)
 from haifa_agent_evals.runner import _default_haifa_jar
 
 EXPECTED_HARBOR_VERSION = "0.20.0"
@@ -95,8 +100,11 @@ def doctor(
     which: Which = shutil.which,
     free_bytes: int | None = None,
     harbor_version: str | None = None,
+    infrastructure_evidence_path: Path | None = None,
 ) -> dict[str, object]:
     checks: list[DoctorCheck] = []
+    current_environment = environment or os.environ
+    infrastructure_evidence_digest: str | None = None
     admission_check, admission_digest = _admission_check(admission_path, config)
     checks.append(admission_check)
 
@@ -147,7 +155,6 @@ def doctor(
     else:
         checks.append(DoctorCheck("haifa-jar", "SKIP", "evaluation has no Haifa candidate"))
 
-    current_environment = environment or os.environ
     required_credentials = (
         {"DEEPSEEK_API_KEY"}
         if any(candidate.id in {"haifa", "aider"} for candidate in config.candidates)
@@ -167,6 +174,48 @@ def doctor(
             ),
         )
     )
+
+    configured_overlay = current_environment.get("HAIFA_EVAL_EXTRA_DOCKER_COMPOSE")
+    if configured_overlay:
+        overlay = Path(configured_overlay)
+        evidence_path = infrastructure_evidence_path
+        if evidence_path is None and current_environment.get(INFRA_EVIDENCE_ENV):
+            evidence_path = Path(current_environment[INFRA_EVIDENCE_ENV])
+        proxy_url = current_environment.get(CONTAINER_PROXY_ENV)
+        if evidence_path is None:
+            checks.append(
+                DoctorCheck(
+                    "harbor-compose-network",
+                    "FAIL",
+                    "infrastructure evidence is required when a Compose overlay is configured",
+                )
+            )
+        elif not proxy_url:
+            checks.append(
+                DoctorCheck(
+                    "harbor-compose-network",
+                    "FAIL",
+                    f"{CONTAINER_PROXY_ENV} is required when a Compose overlay is configured",
+                )
+            )
+        else:
+            ok, detail, infrastructure_evidence_digest = validate_infrastructure_evidence(
+                evidence_path,
+                overlay=overlay,
+                proxy_url=proxy_url,
+                container_cli=resolved_container or "unavailable",
+            )
+            checks.append(
+                DoctorCheck("harbor-compose-network", "PASS" if ok else "FAIL", detail)
+            )
+    else:
+        checks.append(
+            DoctorCheck(
+                "harbor-compose-network",
+                "SKIP",
+                "no Harbor Compose network overlay is configured",
+            )
+        )
 
     available = free_bytes
     if available is None:
@@ -193,6 +242,7 @@ def doctor(
         "dataset": config.dataset,
         "status": status,
         "admissionSha256": admission_digest,
+        "infrastructureEvidenceSha256": infrastructure_evidence_digest,
         "checks": [asdict(check) for check in checks],
     }
     output.parent.mkdir(parents=True, exist_ok=True)

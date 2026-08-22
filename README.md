@@ -57,6 +57,8 @@ uv run evals image seed-aider --container <stopped-aider-trial-container-id>
 uv run evals image build --java-archive /path/to/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz
 uv run evals image check
 uv run evals image prepare-tasks --config evals/coding-smoke-v1.yaml --tasks-path work/derived-tasks
+uv run evals infra proxy start --source-port 2081
+uv run evals infra check --output work/preflight/harbor-compose-network.json
 uv run pytest
 ```
 
@@ -69,7 +71,9 @@ uv run pytest
 不得反向改写正式成绩。
 
 `doctor` 只做只读检查：准入证据、Dataset/Task digest、Harbor 版本、容器连接、JAR smoke、
-Credential 变量存在性、磁盘和 Python 版本。它不会打印 Credential 值，也不会下载镜像或调用模型。
+Credential 变量存在性、磁盘和 Python 版本。配置 Harbor Compose overlay 时，它还要求一份未过期且
+与 overlay、代理端点和容器后端完全匹配的真实 Compose 网络预检证据。它不会打印 Credential 值，
+也不会下载镜像或调用模型。
 非 `--plan-only` 的 `run` 会自动执行同一门禁；任一必需项失败时返回 2，不启动 Harbor。
 
 默认运行目录是 `work/<eval-id>/<UTC-time>-<random>/`。每次运行同时生成唯一的
@@ -100,7 +104,7 @@ Selected/Discovered/Ignored 数量。无法识别时保持 unknown，不猜测�
 
 构建命令把大体积 JDK 和 Aider runtime 复制到被忽略的 `work/image-cache/` 上下文，不把它们提交到 Git，也不需要容器访问外网。构建完成后会执行无模型冒烟检查，并把实际 image ID、大小、标签和 RepoDigests 写入
 `work/image-cache/agent-infra/image-lock.json`。默认镜像名为
-`localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-gradle8.7-v3`。镜像还固定
+`localhost/haifa-agent-evals/agent-infra:jammy-jdk21-aider0.86.2-offline-deps-v4`。镜像还固定
 Gradle 8.7 Wrapper 分发包；构建前必须把官方 zip 放在
 `work/image-cache/gradle/gradle-8.7-bin.zip`（SHA-256
 `544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d`），避免 Java verifier
@@ -109,21 +113,67 @@ Gradle 8.7 Wrapper 分发包；构建前必须把官方 zip 放在
 AssertJ 3.25.1 及其运行期依赖；只把 Gradle 的依赖制品/元数据缓存复制进镜像，不复制 daemon、
 项目编译缓存、锁文件或运行日志。依赖缓存内容摘要记录在镜像 label 和 image lock 中。
 
+v4 同时要求：
+
+- `work/image-cache/python/wheels/` 中存在冻结 Python wheelhouse；
+- `work/image-cache/cargo/cache-manifest.json` 与 `registry/cache/` 中实际 `.crate` 数量一致；当前 30 题
+  的 Rust 子集没有外部 crate，因此允许明确记录为 0，而不是伪造缓存；
+- Gradle、wheelhouse 与 Cargo cache 的 tree digest 全部写入 image label 与 image lock。
+
+生成 Task 镜像后，Python 使用 `PIP_NO_INDEX=1` 和固定 wheelhouse，Cargo 使用
+`CARGO_NET_OFFLINE=true`，Gradle Wrapper 被包装为始终追加 `--offline`。缺少依赖会立即失败，不再等待
+公网超时。任何缓存或离线策略变化都会生成新的 Task/Dataset digest，不能混入历史基线。
+
 Haifa adapter 会先探测镜像中的 Java 21，再决定是否上传 JDK；固定版 Aider adapter 会先核对精确版本，再决定是否联网安装。因此没有使用该镜像时仍可回退安装，使用后则不会在每个 trial 重复下载这两部分基础设施。
 
 该镜像不能直接替代某一道 Harbor 题目镜像，因为它刻意不包含 `/app` 题目 workspace。若后续把它作为题目 Dockerfile 的基础层或生成 Harbor `docker_image`，必须固定新的环境/数据集摘要；不能把结果混入当前冻结数据集。
 
 `image prepare-tasks` 完成上述转换：它先验证原始冻结数据集，并按 `/app` 文件内容匹配本机已经成功构建的 Harbor 题目镜像；随后从这些镜像复用语言工具链与 workspace，再叠加固定 Agent 基础设施，全程不重新下载语言依赖。生成镜像使用 RepoDigest 写入新的 `task.toml`，最后生成新的任务摘要、数据集摘要和 eval 配置。输出默认位于
-`work/image-cache/task-environments/coding-smoke-v1-agent-infra-v3/`。
+`work/image-cache/task-environments/coding-smoke-v1-agent-infra-v4/`。
 
 运行生成环境时显式指定两项本地证据：
 
 ```powershell
-$root = "work/image-cache/task-environments/coding-smoke-v1-agent-infra-v3"
+$root = "work/image-cache/task-environments/coding-smoke-v1-agent-infra-v4"
 $env:HAIFA_EVAL_TASKS_PATH = "$root/tasks"
-$env:HAIFA_EVAL_DATASET_MANIFEST_PATH = "$root/coding-smoke-v1-agent-infra-v3.dataset.toml"
-uv run evals run --config "$root/coding-smoke-v1-agent-infra-v3.yaml"
+$env:HAIFA_EVAL_DATASET_MANIFEST_PATH = "$root/coding-smoke-v1-agent-infra-v4.dataset.toml"
+uv run evals run --config "$root/coding-smoke-v1-agent-infra-v4.yaml"
 ```
+
+## Podman 代理与真实 Harbor 网络预检
+
+Windows + Podman Machine 的标准链路是：
+
+```text
+Windows proxy 127.0.0.1:2081
+  -> SSH reverse tunnel, VM 127.0.0.1:1082
+  -> VM TCP relay, 0.0.0.0:22081
+  -> Harbor Compose main, host.containers.internal:22081
+```
+
+统一入口会先检查三段端口。发现完整健康链路时会复用并标记为外部管理，不启动重复 tunnel；发现只有
+一部分端口被占用时会拒绝启动，避免覆盖未知进程：
+
+```powershell
+uv run evals infra proxy start --source-port 2081
+$env:HAIFA_EVALS_CONTAINER_PROXY = "http://host.containers.internal:22081"
+uv run evals infra check --output work/preflight/harbor-compose-network.json
+```
+
+`infra check` 使用 `infra/preflight/tasks/harbor-compose-network` 启动一条零模型 Oracle Trial，在 Harbor
+实际生成的 Compose `main` 服务内经代理访问健康目标；普通 `podman run` 成功不能替代这份证据。
+证据默认 30 分钟过期。正式运行应固定使用同一 overlay 和证据：
+
+```powershell
+$env:HAIFA_EVAL_EXTRA_DOCKER_COMPOSE = (Resolve-Path "infra/harbor-compose-proxy.yaml").Path
+$env:HAIFA_EVAL_INFRA_EVIDENCE = (Resolve-Path "work/preflight/harbor-compose-network.json").Path
+uv run evals doctor --config <eval.yaml> --tasks-path <tasks> --admission <admission.json> --container-cli podman
+uv run evals run --config <eval.yaml> --tasks-path <tasks> --admission <admission.json> --container-cli podman
+```
+
+当前 Harbor 0.20 在 Windows Podman compatibility wrapper 下启用 phase `network_mode=no-network` 时，
+平台探测会在环境启动前失败。因此 v4 已保证依赖客户端离线和依赖缓存完整，但尚未声称强制阻断容器
+全部直接 egress；升级或修复 Harbor/Podman 兼容后应再启用 verifier phase 的网络隔离。
 
 这样 Harbor 会使用每道题的预构建 RepoDigest，跳过 Dockerfile 构建；Haifa 与 Aider adapter 随后分别验证 Java 21 和 Aider 0.86.2 并跳过大体积安装。
 

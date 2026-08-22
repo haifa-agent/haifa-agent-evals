@@ -5,17 +5,24 @@ ARG PYTHON_VERSION=3.12.8
 ARG JDK_SHA256=f2dc5418092c43003db8f9005c4a286e1c0104fea96ccdd49e8ebd037cac9219
 ARG GRADLE_SHA256=544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d
 ARG GRADLE_CACHE_SHA256
+ARG PYTHON_WHEELHOUSE_SHA256
+ARG CARGO_CACHE_SHA256
 
 LABEL io.haifa.evals.image-purpose="coding-agent-infrastructure" \
       io.haifa.evals.aider-version="${AIDER_VERSION}" \
       io.haifa.evals.java-version="21.0.8+9" \
       io.haifa.evals.gradle-version="8.7" \
       io.haifa.evals.gradle-cache-sha256="${GRADLE_CACHE_SHA256}" \
+      io.haifa.evals.python-wheelhouse-sha256="${PYTHON_WHEELHOUSE_SHA256}" \
+      io.haifa.evals.cargo-cache-sha256="${CARGO_CACHE_SHA256}" \
+      io.haifa.evals.offline-dependency-schema="1" \
       io.haifa.evals.contains-task-data="false"
 
 COPY temurin-jdk.tar.gz /tmp/temurin-jdk.tar.gz
 COPY gradle-8.7-bin.zip /tmp/gradle-8.7-bin.zip
 COPY gradle-modules-2/ /root/.gradle/caches/modules-2/
+COPY python-wheels/ /opt/haifa/offline/python-wheels/
+COPY cargo/ /root/.cargo/
 COPY aider-requirements.lock /tmp/aider-requirements.lock
 COPY verify_aider_lock.py /tmp/verify_aider_lock.py
 ADD aider-runtime.tar.gz /
@@ -48,6 +55,9 @@ RUN set -eux; \
     ln -s "${AIDER_HOME}/bin/aider" /usr/local/bin/aider
 
 ENV JAVA_HOME=/opt/haifa/java
+ENV PIP_NO_INDEX=1
+ENV PIP_FIND_LINKS=/opt/haifa/offline/python-wheels
+ENV CARGO_NET_OFFLINE=true
 ENV PATH=/opt/haifa/java/bin:/root/.local/bin:${PATH}
 
 RUN set -eux; \
@@ -56,10 +66,13 @@ RUN set -eux; \
       'aider_version=0.86.2' \
       'java_version=21.0.8+9' \
       'gradle_version=8.7' \
+      'offline_dependency_schema=1' \
       'contains_task_data=false' \
       > /opt/haifa/agent-infra.properties; \
     chmod 0444 /opt/haifa/agent-infra.properties; \
     test ! -e /app; \
-    test ! -e /opt/haifa/haifa-agent.jar
+    test ! -e /opt/haifa/haifa-agent.jar; \
+    find /opt/haifa/offline/python-wheels -name '*.whl' -type f | grep -q .; \
+    test -r /root/.cargo/cache-manifest.json
 
 WORKDIR /app

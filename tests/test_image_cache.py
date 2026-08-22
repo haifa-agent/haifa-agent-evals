@@ -68,6 +68,12 @@ def test_agent_ready_dockerfile_copies_only_infrastructure() -> None:
     assert "/opt/haifa/java" in generated
     assert "/root/.gradle/wrapper" in generated
     assert "/root/.gradle/caches/modules-2" in generated
+    assert "gradlew.haifa-real" in generated
+    assert '--offline \"$@\"' in generated
+    assert "/opt/haifa/offline/python-wheels" in generated
+    assert "/root/.cargo" in generated
+    assert "PIP_NO_INDEX=1" in generated
+    assert "CARGO_NET_OFFLINE=true" in generated
     assert "haifa-agent.jar" not in generated
 
 
@@ -85,11 +91,14 @@ def test_agent_ready_dockerfile_can_replace_workspace_on_language_base() -> None
 
 def test_task_prebuilt_image_is_digest_pinned() -> None:
     generated = image_cache._task_with_prebuilt_image(
-        '[environment]\ncpus = 1\n',
+        '[verifier]\ntimeout_sec = 60\n[environment]\ncpus = 1\n[verifier.env]\n',
         "localhost/task@sha256:exact",
     )
 
     assert '[environment]\ndocker_image = "localhost/task@sha256:exact"' in generated
+    assert 'PIP_NO_INDEX = "1"' in generated
+    assert 'CARGO_NET_OFFLINE = "true"' in generated
+    assert 'GRADLE_OPTS = "-Dorg.gradle.daemon=false"' in generated
 
 
 def test_host_tree_hash_uses_case_sensitive_posix_relative_order(tmp_path: Path) -> None:
@@ -129,3 +138,56 @@ def test_image_inventory_batches_inspection(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert inspect_batch_sizes == [50, 50, 1]
     assert [entry["Id"] for entry in inventory] == ids
+
+
+def test_cached_task_image_does_not_stack_an_agent_infra_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_task = tmp_path / "polyglot_go_wordy"
+    workspace = source_task / "environment" / "workspace"
+    workspace.mkdir(parents=True)
+    (workspace / "wordy.go").write_text("package wordy\n", encoding="utf-8")
+    expected = image_cache._host_tree_hash(workspace)
+    inventory = [
+        {
+            "Id": "generated",
+            "RepoTags": ["localhost/task-polyglot_go_wordy:v4"],
+            "Config": {"Labels": {"io.haifa.evals.agent-infra": "v4"}},
+        },
+        {
+            "Id": "source",
+            "RepoTags": ["localhost/task-polyglot_go_wordy:source"],
+            "Config": {"Labels": {}},
+        },
+    ]
+
+    def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
+        assert "generated" not in command
+        return CompletedProcess(command, 0, stdout=f"{expected}\n", stderr="")
+
+    monkeypatch.setattr(image_cache.subprocess, "run", run)
+
+    assert image_cache._cached_task_image("podman", source_task, inventory) == "source"
+
+
+def test_cached_language_image_can_recover_an_untagged_clean_base(tmp_path: Path) -> None:
+    source_task = tmp_path / "polyglot_go_wordy"
+    environment = source_task / "environment"
+    environment.mkdir(parents=True)
+    (environment / "Dockerfile").write_text(
+        "RUN curl go1.21.5.linux-amd64.tar.gz\n",
+        encoding="utf-8",
+    )
+    inventory = [
+        {
+            "Id": "clean-language-image",
+            "RepoTags": [],
+            "Config": {"WorkingDir": "/app", "Labels": {}},
+            "History": [{"created_by": "RUN curl go1.21.5.linux-amd64.tar.gz"}],
+        }
+    ]
+
+    assert (
+        image_cache._cached_language_image(source_task, inventory)
+        == "clean-language-image"
+    )
