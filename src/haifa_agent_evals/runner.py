@@ -22,6 +22,7 @@ from haifa_agent_evals.dataset import (
     repository_root,
     validate_local_dataset,
 )
+from haifa_agent_evals.environment_baseline import baseline_lock_path
 
 _local_tasks_path = local_tasks_path
 _validate_local_dataset = validate_local_dataset
@@ -132,12 +133,27 @@ def _harbor_version() -> str:
         return "unavailable"
 
 
-def _task_digests(config: EvaluationConfig) -> dict[str, str]:
+def _task_digests(config: EvaluationConfig, admission_path: Path | None = None) -> dict[str, str]:
     manifest_path = dataset_manifest_path(config)
-    if not manifest_path.is_file():
+    if manifest_path.is_file():
+        manifest = DatasetManifest.from_toml_file(manifest_path)
+        return {task.name: task.digest for task in manifest.tasks if task.name in config.tasks}
+    if admission_path is None or not admission_path.is_file():
         return {}
-    manifest = DatasetManifest.from_toml_file(manifest_path)
-    return {task.name: task.digest for task in manifest.tasks if task.name in config.tasks}
+    try:
+        raw = json.loads(admission_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    records = raw.get("tasks", []) if isinstance(raw, dict) else []
+    return {
+        record["task_id"]: record["task_digest"]
+        for record in records
+        if isinstance(record, dict)
+        and record.get("status") == "ADMITTED"
+        and record.get("task_id") in config.tasks
+        and isinstance(record.get("task_digest"), str)
+        and record["task_digest"].startswith("sha256:")
+    }
 
 
 def config_sha256(config: EvaluationConfig) -> str:
@@ -218,6 +234,14 @@ def _write_inputs(
         raise ValueError("run directory already exists; choose a new run id")
     work_dir.parent.mkdir(parents=True, exist_ok=True)
     tasks_path = _local_tasks_path(config, work_dir, tasks_path)
+    environment_lock = baseline_lock_path(tasks_path) if tasks_path is not None else None
+    dataset_source = (
+        "registry"
+        if tasks_path is None
+        else "local-frozen-environment"
+        if environment_lock is not None and environment_lock.is_file()
+        else "local"
+    )
     extra_docker_compose = _extra_docker_compose()
     job_config_path = work_dir.parent / f"{work_dir.name}-harbor-job.yaml"
     plan_path = work_dir.parent / f"{work_dir.name}-eval-plan.json"
@@ -239,7 +263,7 @@ def _write_inputs(
                 "eval_id": config.id,
                 "dataset": config.dataset,
                 "runId": work_dir.name,
-                "datasetSource": "local" if tasks_path else "registry",
+                "datasetSource": dataset_source,
                 "extraDockerCompose": extra_docker_compose is not None,
                 "tasks": list(config.tasks),
                 "attempts": config.attempts,
@@ -261,9 +285,17 @@ def _write_inputs(
         "evalId": config.id,
         "configSha256": config_sha256(config),
         "dataset": config.dataset,
-        "datasetSource": "local" if tasks_path else "registry",
+        "datasetSource": dataset_source,
         "tasks": list(config.tasks),
-        "taskDigests": _task_digests(config),
+        "taskDigests": _task_digests(config, admission_path),
+        "taskEnvironmentLockSha256": (
+            _file_sha256(environment_lock) if environment_lock is not None else None
+        ),
+        "frozenTaskDigests": (
+            json.loads(environment_lock.read_text(encoding="utf-8")).get("frozenTaskDigests")
+            if environment_lock is not None and environment_lock.is_file()
+            else None
+        ),
         "candidates": [asdict(candidate) for candidate in config.candidates],
         "attempts": config.attempts,
         "timeoutMinutes": config.timeout_minutes,

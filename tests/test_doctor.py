@@ -208,8 +208,62 @@ def test_doctor_blocks_proxy_run_without_harbor_compose_evidence(
     )
 
     assert result["status"] == "BLOCKED"
-    network = next(
-        check for check in result["checks"] if check["name"] == "harbor-compose-network"
-    )
+    network = next(check for check in result["checks"] if check["name"] == "harbor-compose-network")
     assert network["status"] == "FAIL"
     assert "evidence is required" in network["detail"]
+
+
+def test_doctor_accepts_upstream_verified_registry_admission(tmp_path: Path) -> None:
+    dataset_digest = "sha256:" + "a" * 64
+    task_digest = "sha256:" + "b" * 64
+    config = EvaluationConfig(
+        id="swebench-smoke",
+        dataset=f"swe-bench/swe-bench-verified@{dataset_digest}",
+        tasks=("swe-bench/psf__requests-1142",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "deepseek/model"),),
+        dataset_trust="upstream-verified",
+    )
+    admission_path = tmp_path / "admission.json"
+    admission_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 2,
+                "evalId": config.id,
+                "dataset": config.dataset,
+                "manifestDigest": dataset_digest,
+                "status": "ADMITTED",
+                "trustMode": "UPSTREAM_VERIFIED",
+                "policyId": "swe-bench-verified-harbor-v1",
+                "tasks": [
+                    {
+                        "task_id": config.tasks[0],
+                        "task_digest": task_digest,
+                        "status": "ADMITTED",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    jar = tmp_path / "agent.jar"
+    jar.write_bytes(b"fake jar")
+
+    result = doctor(
+        config,
+        tmp_path / "unused-local-tasks",
+        admission_path,
+        tmp_path / "preflight.json",
+        jar_path=jar,
+        container_cli="podman",
+        environment={"DEEPSEEK_API_KEY": "present"},
+        command_probe=lambda command: True,
+        which=lambda command: command,
+        free_bytes=MINIMUM_FREE_BYTES,
+        harbor_version="0.20.0",
+    )
+
+    assert result["status"] == "READY"
+    dataset_check = next(check for check in result["checks"] if check["name"] == "dataset")
+    assert dataset_check["detail"] == "pinned registry dataset and task digests match admission"

@@ -13,8 +13,10 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from haifa_agent_evals.config import EvaluationConfig
+from haifa_agent_evals.admission import upstream_dataset_policy
+from haifa_agent_evals.config import UPSTREAM_VERIFIED, EvaluationConfig
 from haifa_agent_evals.dataset import dataset_manifest_path, validate_local_dataset
+from haifa_agent_evals.environment_baseline import validate_environment_baseline
 from haifa_agent_evals.infrastructure import (
     CONTAINER_PROXY_ENV,
     INFRA_EVIDENCE_ENV,
@@ -81,8 +83,7 @@ def _provider_requirements(
         host = parsed.hostname or ""
         valid = (
             parsed.scheme == "https"
-            and re.fullmatch(r"[a-z0-9-]+\.[a-z0-9-]+\.maas\.aliyuncs\.com", host)
-            is not None
+            and re.fullmatch(r"[a-z0-9-]+\.[a-z0-9-]+\.maas\.aliyuncs\.com", host) is not None
             and parsed.path.rstrip("/") == "/compatible-mode/v1"
             and not parsed.username
             and not parsed.password
@@ -154,6 +155,23 @@ def _admission_check(path: Path, config: EvaluationConfig) -> tuple[DoctorCheck,
     }
     if admitted_tasks != set(config.tasks):
         return DoctorCheck("admission", "FAIL", "admission task set does not match"), None
+    if config.dataset_trust == UPSTREAM_VERIFIED:
+        policy = upstream_dataset_policy(config)
+        if policy is None or raw.get("policyId") != policy["policyId"]:
+            return DoctorCheck("admission", "FAIL", "upstream trust policy does not match"), None
+        if raw.get("trustMode") != "UPSTREAM_VERIFIED":
+            return DoctorCheck("admission", "FAIL", "upstream trust mode does not match"), None
+        task_digests = {
+            record.get("task_id"): record.get("task_digest")
+            for record in task_records
+            if isinstance(record, dict) and record.get("status") == "ADMITTED"
+        }
+        if any(
+            not isinstance(task_digests.get(task), str)
+            or not task_digests[task].startswith("sha256:")
+            for task in config.tasks
+        ):
+            return DoctorCheck("admission", "FAIL", "upstream task digests are missing"), None
     return DoctorCheck("admission", "PASS", "matching admitted dataset evidence"), _sha256(path)
 
 
@@ -182,11 +200,45 @@ def doctor(
     admission_check, admission_digest = _admission_check(admission_path, config)
     checks.append(admission_check)
 
-    try:
-        validate_local_dataset(config, tasks_path, dataset_manifest_path(config))
-        checks.append(DoctorCheck("dataset", "PASS", "manifest and task digests match"))
-    except (OSError, ValueError) as error:
-        checks.append(DoctorCheck("dataset", "FAIL", str(error)))
+    if config.dataset_trust == UPSTREAM_VERIFIED:
+        has_local_tasks = tasks_path.is_dir() and all(
+            (tasks_path / task.rsplit("/", 1)[-1]).is_dir() for task in config.tasks
+        )
+        if has_local_tasks:
+            try:
+                validate_environment_baseline(
+                    config,
+                    tasks_path,
+                    admission_path,
+                    container_cli=container_cli,
+                )
+                checks.append(
+                    DoctorCheck(
+                        "dataset",
+                        "PASS",
+                        "upstream task digests and frozen local environment images match lock",
+                    )
+                )
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                checks.append(DoctorCheck("dataset", "FAIL", str(error)))
+        else:
+            checks.append(
+                DoctorCheck(
+                    "dataset",
+                    "PASS" if admission_check.status == "PASS" else "FAIL",
+                    (
+                        "pinned registry dataset and task digests match admission"
+                        if admission_check.status == "PASS"
+                        else "pinned registry dataset evidence is not admitted"
+                    ),
+                )
+            )
+    else:
+        try:
+            validate_local_dataset(config, tasks_path, dataset_manifest_path(config))
+            checks.append(DoctorCheck("dataset", "PASS", "manifest and task digests match"))
+        except (OSError, ValueError) as error:
+            checks.append(DoctorCheck("dataset", "FAIL", str(error)))
 
     actual_harbor = harbor_version
     if actual_harbor is None:
@@ -275,9 +327,7 @@ def doctor(
                 container_cli=resolved_container or "unavailable",
                 target_url=provider_target,
             )
-            checks.append(
-                DoctorCheck("harbor-compose-network", "PASS" if ok else "FAIL", detail)
-            )
+            checks.append(DoctorCheck("harbor-compose-network", "PASS" if ok else "FAIL", detail))
     else:
         checks.append(
             DoctorCheck(

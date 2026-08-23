@@ -90,9 +90,7 @@ def test_builds_bailian_haifa_agent_with_separate_config(tmp_path: Path) -> None
         "HAIFA_BAILIAN_ENDPOINT": "${HAIFA_BAILIAN_ENDPOINT}",
         "HAIFA_BAILIAN_MODEL_ID": "qwen3.7-max",
     }
-    assert str(agent["kwargs"]["config_path"]).endswith(
-        "haifa-eval-bailian-responses.yaml"
-    )
+    assert str(agent["kwargs"]["config_path"]).endswith("haifa-eval-bailian-responses.yaml")
 
 
 def test_uses_complete_local_task_cache(tmp_path: Path, monkeypatch) -> None:
@@ -344,3 +342,83 @@ def test_failed_run_updates_manifest_terminal_status(tmp_path: Path) -> None:
     manifest = json.loads((tmp_path / "run-1-run-manifest.json").read_text(encoding="utf-8"))
     assert manifest["runStatus"] == "HARBOR_FAILED"
     assert manifest["finishedAt"]
+
+
+def test_registry_run_manifest_records_admitted_task_digests(tmp_path: Path) -> None:
+    task = "swe-bench/psf__requests-1142"
+    task_digest = "sha256:" + "b" * 64
+    config = EvaluationConfig(
+        id="swebench-smoke",
+        dataset=f"swe-bench/swe-bench-verified@sha256:{'a' * 64}",
+        tasks=(task,),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "deepseek/model"),),
+        dataset_trust="upstream-verified",
+    )
+    admission = tmp_path / "admission.json"
+    admission.write_text(
+        json.dumps(
+            {
+                "tasks": [
+                    {
+                        "task_id": task,
+                        "task_digest": task_digest,
+                        "status": "ADMITTED",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run(
+        config,
+        tmp_path / "run-1",
+        plan_only=True,
+        admission_path=admission,
+    )
+
+    manifest = json.loads((tmp_path / "run-1-run-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["datasetSource"] == "registry"
+    assert manifest["taskDigests"] == {task: task_digest}
+
+
+def test_frozen_environment_run_manifest_records_lock(tmp_path: Path) -> None:
+    task = "swe-bench/psf__requests-1142"
+    task_digest = "sha256:" + "b" * 64
+    frozen_digest = "sha256:" + "c" * 64
+    config = EvaluationConfig(
+        id="swebench-smoke",
+        dataset=f"swe-bench/swe-bench-verified@sha256:{'a' * 64}",
+        tasks=(task,),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "deepseek/model"),),
+        dataset_trust="upstream-verified",
+    )
+    tasks_path = tmp_path / "baseline" / "tasks"
+    (tasks_path / "psf__requests-1142").mkdir(parents=True)
+    lock = tasks_path.parent / "task-environment-lock.json"
+    lock.write_text(json.dumps({"frozenTaskDigests": {task: frozen_digest}}), encoding="utf-8")
+    admission = tmp_path / "admission.json"
+    admission.write_text(
+        json.dumps(
+            {"tasks": [{"task_id": task, "task_digest": task_digest, "status": "ADMITTED"}]}
+        ),
+        encoding="utf-8",
+    )
+
+    run(
+        config,
+        tmp_path / "run-1",
+        plan_only=True,
+        tasks_path=tasks_path,
+        admission_path=admission,
+    )
+
+    manifest = json.loads((tmp_path / "run-1-run-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["datasetSource"] == "local-frozen-environment"
+    assert manifest["taskDigests"] == {task: task_digest}
+    assert manifest["frozenTaskDigests"] == {task: frozen_digest}
+    assert manifest["taskEnvironmentLockSha256"]

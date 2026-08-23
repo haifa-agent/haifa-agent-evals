@@ -5,7 +5,11 @@ import pytest
 from harbor.models.dataset.manifest import DatasetInfo, DatasetManifest, DatasetTaskRef
 from harbor.publisher.packager import Packager
 
-from haifa_agent_evals.admission import admit
+from haifa_agent_evals.admission import (
+    RegistryDatasetEvidence,
+    admit,
+    admit_upstream_verified,
+)
 from haifa_agent_evals.config import Candidate, EvaluationConfig
 
 
@@ -117,3 +121,48 @@ def test_rejects_calibration_for_unknown_task(tmp_path: Path, monkeypatch) -> No
 
     with pytest.raises(ValueError, match="unknown tasks"):
         admit(config, tasks_path, oracle, nop, tmp_path / "admission.json")
+
+
+def test_admits_pinned_upstream_verified_registry_subset(tmp_path: Path) -> None:
+    digest = "sha256:" + "a" * 64
+    task_digest = "sha256:" + "b" * 64
+    config = EvaluationConfig(
+        id="swebench-smoke",
+        dataset=f"swe-bench/swe-bench-verified@{digest}",
+        tasks=("swe-bench/psf__requests-1142",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "deepseek/model"),),
+        dataset_trust="upstream-verified",
+    )
+    output = tmp_path / "admission.json"
+
+    result = admit_upstream_verified(
+        config,
+        output,
+        resolver=lambda _dataset: RegistryDatasetEvidence(
+            name="swe-bench/swe-bench-verified",
+            digest=digest,
+            task_digests={config.tasks[0]: task_digest},
+        ),
+    )
+
+    assert result["status"] == "ADMITTED"
+    assert result["trustMode"] == "UPSTREAM_VERIFIED"
+    assert result["tasks"][0]["task_digest"] == task_digest
+    assert "parity_experiment.json" in result["upstreamEvidence"]["harborParity"]
+
+
+def test_rejects_untrusted_upstream_dataset(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="untrusted",
+        dataset=f"org/unreviewed@sha256:{'a' * 64}",
+        tasks=("org/task",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "deepseek/model"),),
+        dataset_trust="upstream-verified",
+    )
+
+    with pytest.raises(ValueError, match="not covered"):
+        admit_upstream_verified(config, tmp_path / "admission.json")
