@@ -71,6 +71,7 @@ def test_install_uploads_and_verifies_immutable_inputs(tmp_path: Path) -> None:
     assert [target for _, target in environment.uploads] == [
         "/opt/haifa/haifa-agent.jar",
         "/opt/haifa/haifa-eval.yaml",
+        "/opt/haifa/loopback_tcp_relay.py",
     ]
     all_commands = "\n".join(command for command, _, _ in environment.commands)
     assert agent.jar_digest in all_commands
@@ -140,7 +141,31 @@ def test_install_skips_pinned_java_archive_when_image_java_is_usable(
     assert [target for _, target in environment.uploads] == [
         "/opt/haifa/haifa-agent.jar",
         "/opt/haifa/haifa-eval.yaml",
+        "/opt/haifa/loopback_tcp_relay.py",
     ]
+
+
+def test_run_starts_container_loopback_relay_when_configured(tmp_path: Path) -> None:
+    jar = tmp_path / "agent.jar"
+    config = tmp_path / "config.yaml"
+    jar.write_bytes(b"fake jar")
+    config.write_text("approval: {mode: auto}\n", encoding="utf-8")
+    agent = HaifaCodingAgent(
+        logs_dir=tmp_path / "logs",
+        jar_path=jar,
+        config_path=config,
+        loopback_relay_host="host.containers.internal",
+        loopback_relay_port=28317,
+    )
+    environment = _FakeEnvironment()
+    context = AgentContext()
+
+    asyncio.run(agent.run("fix it", environment, context))  # type: ignore[arg-type]
+
+    command = next(command for command, _, _ in environment.commands if "--message" in command)
+    assert "--listen-host 127.0.0.1 --listen-port 8317" in command
+    assert "--target-host host.containers.internal --target-port 28317" in command
+    assert "trap 'kill $RELAY_PID" in command
 
 
 @pytest.mark.parametrize("exit_code", [0, 1, 2])

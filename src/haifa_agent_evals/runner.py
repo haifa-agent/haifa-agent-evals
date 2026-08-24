@@ -56,6 +56,24 @@ def _agent_config(candidate: Candidate, timeout_seconds: int) -> dict[str, objec
                 / "haifa-eval-bailian-responses.yaml"
             )
         }
+    elif candidate.id == "haifa" and provider == "cliproxyapi-antigravity":
+        result["env"] = {
+            "HAIFA_CLIPROXYAPI_API_KEY": "${HAIFA_CLIPROXYAPI_API_KEY}",
+            "HAIFA_CLIPROXYAPI_ENDPOINT": "http://127.0.0.1:8317/v1beta",
+            "HAIFA_CLIPROXYAPI_MODEL": candidate.model,
+            "HAIFA_ALLOW_INSECURE_LOOPBACK_MODEL": "true",
+            "HAIFA_MODEL_ID": "cliproxyapi-gemini",
+        }
+        result["kwargs"] = {
+            "config_path": str(
+                Path(__file__).resolve().parent
+                / "integrations"
+                / "harbor"
+                / "haifa-eval-cliproxyapi-gemini.yaml"
+            ),
+            "loopback_relay_host": "host.containers.internal",
+            "loopback_relay_port": 28317,
+        }
     elif candidate.id == "haifa":
         raise ValueError(f"unsupported Haifa evaluation provider: {provider}")
     elif candidate.id == "aider":

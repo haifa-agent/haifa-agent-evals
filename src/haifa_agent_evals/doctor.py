@@ -27,6 +27,7 @@ from haifa_agent_evals.runner import _default_haifa_jar
 EXPECTED_HARBOR_VERSION = "0.20.0"
 MINIMUM_FREE_BYTES = 5 * 1024 * 1024 * 1024
 _DEEPSEEK_TARGET = "https://api.deepseek.com/"
+_CLIPROXYAPI_TARGET = "http://host.containers.internal:28317/v1/models"
 
 
 @dataclass(frozen=True)
@@ -101,7 +102,10 @@ def _provider_requirements(
                 ),
             )
         targets.add(endpoint)
-    unsupported = sorted(providers - {"deepseek", "aliyun-bailian"})
+    if "cliproxyapi-antigravity" in providers:
+        required_credentials.add("HAIFA_CLIPROXYAPI_API_KEY")
+        targets.add(_CLIPROXYAPI_TARGET)
+    unsupported = sorted(providers - {"deepseek", "aliyun-bailian", "cliproxyapi-antigravity"})
     if unsupported:
         return (
             required_credentials,

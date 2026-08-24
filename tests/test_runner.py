@@ -279,6 +279,38 @@ def test_checked_in_aider_route_survives_harbor_provider_split(tmp_path: Path) -
     assert aider["env"]["AIDER_DISABLE_PLAYWRIGHT"] == "true"
 
 
+def test_cliproxyapi_gemini_route_uses_loopback_dialect_and_relay(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="gemini-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent",
+                "gemini-3-flash",
+                "cliproxyapi-antigravity",
+            ),
+        ),
+    )
+
+    job_config = build_job_config(config, tmp_path)
+
+    agent = job_config["agents"][0]
+    assert agent["env"] == {
+        "HAIFA_CLIPROXYAPI_API_KEY": "${HAIFA_CLIPROXYAPI_API_KEY}",
+        "HAIFA_CLIPROXYAPI_ENDPOINT": "http://127.0.0.1:8317/v1beta",
+        "HAIFA_CLIPROXYAPI_MODEL": "gemini-3-flash",
+        "HAIFA_ALLOW_INSECURE_LOOPBACK_MODEL": "true",
+        "HAIFA_MODEL_ID": "cliproxyapi-gemini",
+    }
+    assert str(agent["kwargs"]["config_path"]).endswith("haifa-eval-cliproxyapi-gemini.yaml")
+    assert agent["kwargs"]["loopback_relay_host"] == "host.containers.internal"
+    assert agent["kwargs"]["loopback_relay_port"] == 28317
+
+
 def test_run_refuses_to_reuse_a_run_directory(tmp_path: Path) -> None:
     config = EvaluationConfig(
         id="smoke",

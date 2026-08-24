@@ -128,6 +128,47 @@ def test_doctor_accepts_bailian_provider_without_exposing_endpoint(
     assert "workspace-123" not in rendered
 
 
+def test_doctor_accepts_cliproxyapi_antigravity_without_exposing_key(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base, tasks_path, admission_path = _fixture(tmp_path, monkeypatch)
+    config = EvaluationConfig(
+        id=base.id,
+        dataset=base.dataset,
+        tasks=base.tasks,
+        attempts=base.attempts,
+        timeout_minutes=base.timeout_minutes,
+        candidates=(
+            Candidate(
+                "haifa",
+                "package:Haifa",
+                "gemini-3-flash",
+                "cliproxyapi-antigravity",
+            ),
+        ),
+    )
+    jar = tmp_path / "agent.jar"
+    jar.write_bytes(b"fake jar")
+    output = tmp_path / "preflight.json"
+
+    result = doctor(
+        config,
+        tasks_path,
+        admission_path,
+        output,
+        jar_path=jar,
+        container_cli="podman",
+        environment={"HAIFA_CLIPROXYAPI_API_KEY": "local-secret"},
+        command_probe=lambda command: True,
+        which=lambda command: command,
+        free_bytes=MINIMUM_FREE_BYTES,
+        harbor_version="0.20.0",
+    )
+
+    assert result["status"] == "READY"
+    assert "local-secret" not in output.read_text(encoding="utf-8")
+
+
 def test_doctor_blocks_missing_admission_credential_and_container(
     tmp_path: Path, monkeypatch
 ) -> None:
