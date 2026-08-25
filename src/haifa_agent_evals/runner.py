@@ -75,8 +75,9 @@ def _agent_config(candidate: Candidate, timeout_seconds: int) -> dict[str, objec
             "loopback_relay_port": 28317,
         }
     elif candidate.id == "haifa" and provider == "openai-codex":
-        if candidate.model != "gpt-5.6-terra":
-            raise ValueError("the Codex smoke route is pinned to gpt-5.6-terra")
+        supported_codex_models = {"gpt-5.6-sol", "gpt-5.6-terra"}
+        if candidate.model not in supported_codex_models:
+            raise ValueError(f"unsupported Codex evaluation model: {candidate.model}")
         result["env"] = {
             "HAIFA_MODEL_ID": candidate.model,
             "HAIFA_CODEX_ORIGINATOR": "haifa",

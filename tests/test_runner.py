@@ -336,6 +336,50 @@ def test_openai_codex_route_uses_terra_oauth_and_container_proxy(tmp_path: Path)
     assert agent["kwargs"]["codex_auth"] is True
 
 
+def test_openai_codex_route_supports_sol(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="codex-sol-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent",
+                "gpt-5.6-sol",
+                "openai-codex",
+            ),
+        ),
+    )
+
+    agent = build_job_config(config, tmp_path)["agents"][0]
+
+    assert agent["env"]["HAIFA_MODEL_ID"] == "gpt-5.6-sol"
+    assert agent["kwargs"]["codex_auth"] is True
+
+
+def test_openai_codex_route_rejects_unknown_model(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="codex-unknown-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent",
+                "gpt-unknown",
+                "openai-codex",
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="unsupported Codex evaluation model"):
+        build_job_config(config, tmp_path)
+
+
 def test_run_refuses_to_reuse_a_run_directory(tmp_path: Path) -> None:
     config = EvaluationConfig(
         id="smoke",
