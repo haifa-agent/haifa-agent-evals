@@ -1,0 +1,74 @@
+models:
+  default: gpt-5.6-terra
+  providers:
+    - id: openai-codex
+      displayName: ChatGPT Codex
+      endpoint: https://chatgpt.com/backend-api/codex
+      credentialRef: model-auth://openai-codex/default
+      originator: ${HAIFA_CODEX_ORIGINATOR:haifa}
+      userAgent: ${HAIFA_CODEX_USER_AGENT:haifa-agent-evals/1}
+      nativeStreaming: true
+      apiBindings:
+        - style: openai-responses
+          dialect: openai-codex-responses
+      models:
+        - id: gpt-5.6-terra
+          displayName: GPT-5.6 Terra
+          providerModelId: gpt-5.6-terra
+          style: openai-responses
+          capabilities: [TEXT_CHAT, TOOL_CALLING, REASONING]
+          contextWindow: 272000
+          maxOutputTokens: 128000
+
+tools:
+  enabled:
+    - file.list
+    - file.stat
+    - file.read
+    - file.create
+    - file.write
+    - file.patch
+    - file.delete
+    - file.move
+    - execution.run
+
+skills:
+  allowed: []
+
+approval:
+  mode: auto
+
+execution:
+  provider: host-guarded
+  network: allow
+  shell: auto
+  defaultTimeoutMillis: 120000
+  maxTimeoutMillis: 1200000
+  maxOutputLines: 2000
+  maxOutputBytes: 51200
+  maxProcesses: 32
+  inheritEnvironment:
+    - PATH
+    - JAVA_HOME
+    - HOME
+    - LANG
+    - LC_ALL
+    - TMPDIR
+    - TMP
+    - TEMP
+    - GOTMPDIR
+    - GOCACHE
+  extraPathPolicies: []
+
+runtime:
+  maxIterations: 50
+  maxToolCalls: 32
+  maxWallTimeMillis: 1200000
+
+persistence:
+  mode: SQLITE_WITH_JSONL
+  databasePath: /tmp/haifa-runtime.db
+  transcriptRoot: /tmp/haifa-transcripts
+  protection: NONE
+  busyTimeoutMillis: 5000
+  maximumPayloadBytes: 1048576

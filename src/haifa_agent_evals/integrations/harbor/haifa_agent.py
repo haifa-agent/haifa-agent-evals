@@ -3,12 +3,15 @@ from __future__ import annotations
 import hashlib
 import os
 import shlex
+import tempfile
 from pathlib import Path
 from typing import override
 
 from harbor.agents.installed.base import BaseInstalledAgent, NonZeroAgentExitCodeError
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
+
+from haifa_agent_evals.codex_auth import codex_auth_path, minimal_codex_auth
 
 _CONTAINER_ROOT = "/opt/haifa"
 _JAR_PATH = f"{_CONTAINER_ROOT}/haifa-agent.jar"
@@ -19,6 +22,8 @@ _TRANSCRIPT_ROOT = "/tmp/haifa-transcripts"
 _ARCHIVED_DATABASE_PATH = "/logs/agent/haifa-runtime.db"
 _ARCHIVED_TRANSCRIPT_ROOT = "/logs/agent/haifa-transcripts"
 _JAVA_ARCHIVE_PATH = "/tmp/haifa-java.tar.gz"
+_CODEX_AUTH_UPLOAD_PATH = "/tmp/haifa-codex-auth.json"
+_CODEX_AUTH_PATH = "/root/.haifa-agent/auth.json"
 _JAVA_ARCHIVE_URL = (
     "https://github.com/adoptium/temurin21-binaries/releases/download/"
     "jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz"
@@ -45,6 +50,7 @@ class HaifaCodingAgent(BaseInstalledAgent):
         java_archive_path: str | Path | None = None,
         loopback_relay_host: str | None = None,
         loopback_relay_port: int | None = None,
+        codex_auth: bool = False,
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -76,6 +82,9 @@ class HaifaCodingAgent(BaseInstalledAgent):
         self.loopback_relay_digest = _sha256(self.loopback_relay_path)
         self.loopback_relay_host = loopback_relay_host
         self.loopback_relay_port = loopback_relay_port
+        self.codex_auth_path = codex_auth_path() if codex_auth else None
+        if self.codex_auth_path is not None:
+            minimal_codex_auth(self.codex_auth_path)
         if (loopback_relay_host is None) != (loopback_relay_port is None):
             raise ValueError("loopback relay host and port must be configured together")
         if loopback_relay_port is not None and not 1 <= loopback_relay_port <= 65535:
@@ -131,6 +140,21 @@ class HaifaCodingAgent(BaseInstalledAgent):
         await environment.upload_file(self.jar_path, _JAR_PATH)
         await environment.upload_file(self.config_path, _CONFIG_PATH)
         await environment.upload_file(self.loopback_relay_path, _LOOPBACK_RELAY_PATH)
+        if self.codex_auth_path is not None:
+            payload = minimal_codex_auth(self.codex_auth_path)
+            with tempfile.TemporaryDirectory(prefix="haifa-eval-codex-auth-") as directory:
+                temporary_auth = Path(directory) / "auth.json"
+                temporary_auth.write_bytes(payload)
+                temporary_auth.chmod(0o600)
+                await environment.upload_file(temporary_auth, _CODEX_AUTH_UPLOAD_PATH)
+            await self.exec_as_root(
+                environment,
+                command=(
+                    "install -d -m 0700 /root/.haifa-agent && "
+                    f"install -m 0600 {_CODEX_AUTH_UPLOAD_PATH} {_CODEX_AUTH_PATH} && "
+                    f"rm {_CODEX_AUTH_UPLOAD_PATH}"
+                ),
+            )
         await self.exec_as_root(
             environment,
             command=(

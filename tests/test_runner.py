@@ -311,6 +311,31 @@ def test_cliproxyapi_gemini_route_uses_loopback_dialect_and_relay(tmp_path: Path
     assert agent["kwargs"]["loopback_relay_port"] == 28317
 
 
+def test_openai_codex_route_uses_terra_oauth_and_container_proxy(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="codex-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent",
+                "gpt-5.6-terra",
+                "openai-codex",
+            ),
+        ),
+    )
+
+    agent = build_job_config(config, tmp_path)["agents"][0]
+
+    assert agent["env"]["HAIFA_MODEL_ID"] == "gpt-5.6-terra"
+    assert "host.containers.internal" in agent["env"]["JAVA_TOOL_OPTIONS"]
+    assert str(agent["kwargs"]["config_path"]).endswith("haifa-eval-openai-codex.yaml")
+    assert agent["kwargs"]["codex_auth"] is True
+
+
 def test_run_refuses_to_reuse_a_run_directory(tmp_path: Path) -> None:
     config = EvaluationConfig(
         id="smoke",

@@ -74,6 +74,27 @@ def _agent_config(candidate: Candidate, timeout_seconds: int) -> dict[str, objec
             "loopback_relay_host": "host.containers.internal",
             "loopback_relay_port": 28317,
         }
+    elif candidate.id == "haifa" and provider == "openai-codex":
+        if candidate.model != "gpt-5.6-terra":
+            raise ValueError("the Codex smoke route is pinned to gpt-5.6-terra")
+        result["env"] = {
+            "HAIFA_MODEL_ID": candidate.model,
+            "HAIFA_CODEX_ORIGINATOR": "haifa",
+            "HAIFA_CODEX_USER_AGENT": "haifa-agent-evals/1",
+            "JAVA_TOOL_OPTIONS": (
+                "-Duser.home=/root "
+                "-Dhttps.proxyHost=host.containers.internal -Dhttps.proxyPort=22081"
+            ),
+        }
+        result["kwargs"] = {
+            "config_path": str(
+                Path(__file__).resolve().parent
+                / "integrations"
+                / "harbor"
+                / "haifa-eval-openai-codex.yaml"
+            ),
+            "codex_auth": True,
+        }
     elif candidate.id == "haifa":
         raise ValueError(f"unsupported Haifa evaluation provider: {provider}")
     elif candidate.id == "aider":

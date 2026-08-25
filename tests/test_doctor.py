@@ -169,6 +169,69 @@ def test_doctor_accepts_cliproxyapi_antigravity_without_exposing_key(
     assert "local-secret" not in output.read_text(encoding="utf-8")
 
 
+def test_doctor_accepts_openai_codex_minimal_oauth_without_exposing_tokens(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base, tasks_path, admission_path = _fixture(tmp_path, monkeypatch)
+    config = EvaluationConfig(
+        id=base.id,
+        dataset=base.dataset,
+        tasks=base.tasks,
+        attempts=base.attempts,
+        timeout_minutes=base.timeout_minutes,
+        candidates=(
+            Candidate("haifa", "package:Haifa", "gpt-5.6-terra", "openai-codex"),
+        ),
+    )
+    auth = tmp_path / "auth.json"
+    auth.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "credentials": {
+                    "model-auth://openai-codex/default": {
+                        "kind": "EXTERNAL",
+                        "method_id": "openai-codex",
+                        "client_registration_ref": "local-compat",
+                        "access_token": "access-secret",
+                        "refresh_token": "refresh-secret",
+                        "expires_at_epoch_millis": 2_000_000_000_000,
+                        "issued_at_epoch_millis": 1_900_000_000_000,
+                        "account_id": "account-secret",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    jar = tmp_path / "agent.jar"
+    jar.write_bytes(b"fake jar")
+    output = tmp_path / "preflight.json"
+
+    result = doctor(
+        config,
+        tasks_path,
+        admission_path,
+        output,
+        jar_path=jar,
+        container_cli="podman",
+        environment={"HAIFA_EVAL_CODEX_AUTH_PATH": str(auth)},
+        command_probe=lambda command: True,
+        which=lambda command: command,
+        free_bytes=MINIMUM_FREE_BYTES,
+        harbor_version="0.20.0",
+    )
+
+    assert result["status"] == "READY"
+    rendered = output.read_text(encoding="utf-8")
+    assert "access-secret" not in rendered
+    assert "refresh-secret" not in rendered
+    assert any(
+        check["name"] == "codex-auth" and check["status"] == "PASS"
+        for check in result["checks"]
+    )
+
+
 def test_doctor_blocks_missing_admission_credential_and_container(
     tmp_path: Path, monkeypatch
 ) -> None:

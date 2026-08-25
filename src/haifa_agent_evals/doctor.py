@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from haifa_agent_evals.admission import upstream_dataset_policy
+from haifa_agent_evals.codex_auth import codex_auth_path, minimal_codex_auth
 from haifa_agent_evals.config import UPSTREAM_VERIFIED, EvaluationConfig
 from haifa_agent_evals.dataset import dataset_manifest_path, validate_local_dataset
 from haifa_agent_evals.environment_baseline import validate_environment_baseline
@@ -28,6 +29,7 @@ EXPECTED_HARBOR_VERSION = "0.20.0"
 MINIMUM_FREE_BYTES = 5 * 1024 * 1024 * 1024
 _DEEPSEEK_TARGET = "https://api.deepseek.com/"
 _CLIPROXYAPI_TARGET = "http://host.containers.internal:28317/v1/models"
+_CODEX_TARGET = "https://chatgpt.com/backend-api/codex"
 
 
 @dataclass(frozen=True)
@@ -105,7 +107,11 @@ def _provider_requirements(
     if "cliproxyapi-antigravity" in providers:
         required_credentials.add("HAIFA_CLIPROXYAPI_API_KEY")
         targets.add(_CLIPROXYAPI_TARGET)
-    unsupported = sorted(providers - {"deepseek", "aliyun-bailian", "cliproxyapi-antigravity"})
+    if "openai-codex" in providers:
+        targets.add(_CODEX_TARGET)
+    unsupported = sorted(
+        providers - {"deepseek", "aliyun-bailian", "cliproxyapi-antigravity", "openai-codex"}
+    )
     if unsupported:
         return (
             required_credentials,
@@ -201,6 +207,19 @@ def doctor(
         config, current_environment
     )
     checks.append(provider_check)
+    uses_codex = any(
+        candidate.resolved_provider() == "openai-codex" for candidate in config.candidates
+    )
+    if uses_codex:
+        try:
+            minimal_codex_auth(codex_auth_path(current_environment))
+            checks.append(
+                DoctorCheck("codex-auth", "PASS", "minimal Codex OAuth credential is ready")
+            )
+        except ValueError as error:
+            checks.append(DoctorCheck("codex-auth", "FAIL", str(error)))
+    else:
+        checks.append(DoctorCheck("codex-auth", "SKIP", "evaluation does not use Codex OAuth"))
     admission_check, admission_digest = _admission_check(admission_path, config)
     checks.append(admission_check)
 
