@@ -25,6 +25,11 @@ from haifa_agent_evals.infrastructure import (
     run_compose_network_preflight,
 )
 from haifa_agent_evals.proxy_relay import relay_status, start_relay, stop_relay
+from haifa_agent_evals.registry_cache import (
+    check_swebench_cache,
+    publish_swebench_cache,
+    restore_swebench_cache,
+)
 from haifa_agent_evals.reporter import report
 from haifa_agent_evals.runner import new_run_id, run
 
@@ -118,6 +123,28 @@ def _parser() -> argparse.ArgumentParser:
     image_check = image_commands.add_parser("check", help="inspect and smoke-test the image")
     image_check.add_argument("--image", default=DEFAULT_IMAGE)
     image_check.add_argument("--container-cli")
+    image_publish = image_commands.add_parser(
+        "publish-swebench-cache", help="push a frozen SWE-bench baseline to an OCI registry"
+    )
+    image_publish.add_argument("--config", type=Path, required=True)
+    image_publish.add_argument("--tasks-path", type=Path, required=True)
+    image_publish.add_argument("--admission", type=Path, required=True)
+    image_publish.add_argument("--registry-prefix", required=True)
+    image_publish.add_argument("--output", type=Path, required=True)
+    image_publish.add_argument("--container-cli")
+    image_cache_check = image_commands.add_parser(
+        "check-swebench-cache", help="verify that every locked registry digest is available"
+    )
+    image_cache_check.add_argument("--config", type=Path, required=True)
+    image_cache_check.add_argument("--tasks-path", type=Path, required=True)
+    image_cache_check.add_argument("--container-cli")
+    image_restore = image_commands.add_parser(
+        "restore-swebench-cache", help="pull and validate a frozen registry baseline"
+    )
+    image_restore.add_argument("--config", type=Path, required=True)
+    image_restore.add_argument("--tasks-path", type=Path, required=True)
+    image_restore.add_argument("--admission", type=Path, required=True)
+    image_restore.add_argument("--container-cli")
 
     infra_parser = commands.add_parser(
         "infra", help="manage and verify the evaluation network infrastructure"
@@ -277,6 +304,41 @@ def main(argv: list[str] | None = None) -> int:
                     args.output,
                     container_cli=args.container_cli,
                     source_images=args.source_image,
+                ),
+                indent=2,
+            )
+        )
+    elif args.command == "image" and args.image_command == "publish-swebench-cache":
+        print(
+            json.dumps(
+                publish_swebench_cache(
+                    args.config,
+                    args.tasks_path,
+                    args.admission,
+                    args.registry_prefix,
+                    args.output,
+                    container_cli=args.container_cli,
+                ),
+                indent=2,
+            )
+        )
+    elif args.command == "image" and args.image_command == "check-swebench-cache":
+        print(
+            json.dumps(
+                check_swebench_cache(
+                    args.config, args.tasks_path, container_cli=args.container_cli
+                ),
+                indent=2,
+            )
+        )
+    elif args.command == "image" and args.image_command == "restore-swebench-cache":
+        print(
+            json.dumps(
+                restore_swebench_cache(
+                    args.config,
+                    args.tasks_path,
+                    args.admission,
+                    container_cli=args.container_cli,
                 ),
                 indent=2,
             )

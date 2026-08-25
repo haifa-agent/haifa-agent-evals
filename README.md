@@ -168,8 +168,24 @@ uv run evals run `
 ```
 
 自动发现仅在本机恰好有一个匹配 Task slug 且工作目录为 `/testbed` 的镜像时成立；多镜像场景用
-可重复的 `--source-image task=image` 显式消歧。环境锁只冻结本机可启动镜像，不等同于可搬运的
-OCI 归档；迁移机器时仍需导出/导入镜像并保持相同 RepoDigest。
+可重复的 `--source-image task=image` 显式消歧。本地冻结完成后，使用 `image publish-swebench-cache`
+将镜像推送到 OCI Registry，并生成 schema 2 的可迁移 baseline；正式配置只引用 Registry
+`@sha256:`，不能使用可漂移 tag：
+
+```powershell
+uv run evals image publish-swebench-cache `
+  --config evals/coding-swebench-verified-smoke-v1.yaml `
+  --tasks-path $baseline `
+  --admission $admission `
+  --registry-prefix asia-east1-docker.pkg.dev/PROJECT/haifa-eval-images `
+  --output work/cache/images/task-environments/coding-swebench-verified-smoke-registry-v1 `
+  --container-cli podman
+```
+
+新机器可以先用 `image check-swebench-cache` 做只读远端存在性检查，再用
+`image restore-swebench-cache` 拉取缺失镜像。恢复命令逐题比较 lock 中的 reference、image ID、OCI
+digest、大小、OS 和架构，并重新执行完整环境 baseline 校验；任一镜像缺失或身份不匹配都会在模型
+调用前失败。正式 Runner 只应有 Registry Reader 权限，不能在 cache miss 时现场构建或推送。
 
 `evals/coding-swebench-verified-representative-5-v1.yaml` 是第一批固定 DeepSeek Pipeline Smoke：
 

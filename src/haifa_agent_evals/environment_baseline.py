@@ -153,7 +153,7 @@ def validate_environment_baseline(
     lock_path = baseline_lock_path(resolved_tasks)
     lock = _read_object(lock_path, "task environment lock")
     if (
-        lock.get("schemaVersion") != 1
+        lock.get("schemaVersion") not in (1, 2)
         or lock.get("evalId") != config.id
         or lock.get("dataset") != config.dataset
         or lock.get("tasks") != list(config.tasks)

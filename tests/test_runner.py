@@ -501,7 +501,19 @@ def test_frozen_environment_run_manifest_records_lock(tmp_path: Path) -> None:
     tasks_path = tmp_path / "baseline" / "tasks"
     (tasks_path / "psf__requests-1142").mkdir(parents=True)
     lock = tasks_path.parent / "task-environment-lock.json"
-    lock.write_text(json.dumps({"frozenTaskDigests": {task: frozen_digest}}), encoding="utf-8")
+    lock.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 2,
+                "frozenTaskDigests": {task: frozen_digest},
+                "registryPrefix": "asia-east1-docker.pkg.dev/project/repository",
+                "builderContract": "swebench-registry-cache-v1",
+                "images": {task: {"reference": "registry/task@sha256:digest"}},
+                "cacheKeys": {task: "sha256:cache"},
+            }
+        ),
+        encoding="utf-8",
+    )
     admission = tmp_path / "admission.json"
     admission.write_text(
         json.dumps(
@@ -523,3 +535,4 @@ def test_frozen_environment_run_manifest_records_lock(tmp_path: Path) -> None:
     assert manifest["taskDigests"] == {task: task_digest}
     assert manifest["frozenTaskDigests"] == {task: frozen_digest}
     assert manifest["taskEnvironmentLockSha256"]
+    assert manifest["taskEnvironment"]["images"][task]["reference"].endswith("@sha256:digest")

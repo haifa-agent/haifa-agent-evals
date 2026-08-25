@@ -275,6 +275,11 @@ def _write_inputs(
     work_dir.parent.mkdir(parents=True, exist_ok=True)
     tasks_path = _local_tasks_path(config, work_dir, tasks_path)
     environment_lock = baseline_lock_path(tasks_path) if tasks_path is not None else None
+    environment_lock_payload = (
+        json.loads(environment_lock.read_text(encoding="utf-8"))
+        if environment_lock is not None and environment_lock.is_file()
+        else None
+    )
     dataset_source = (
         "registry"
         if tasks_path is None
@@ -332,8 +337,19 @@ def _write_inputs(
             _file_sha256(environment_lock) if environment_lock is not None else None
         ),
         "frozenTaskDigests": (
-            json.loads(environment_lock.read_text(encoding="utf-8")).get("frozenTaskDigests")
-            if environment_lock is not None and environment_lock.is_file()
+            environment_lock_payload.get("frozenTaskDigests")
+            if environment_lock_payload is not None
+            else None
+        ),
+        "taskEnvironment": (
+            {
+                "schemaVersion": environment_lock_payload.get("schemaVersion"),
+                "registryPrefix": environment_lock_payload.get("registryPrefix"),
+                "builderContract": environment_lock_payload.get("builderContract"),
+                "images": environment_lock_payload.get("images"),
+                "cacheKeys": environment_lock_payload.get("cacheKeys"),
+            }
+            if environment_lock_payload is not None
             else None
         ),
         "candidates": [asdict(candidate) for candidate in config.candidates],
