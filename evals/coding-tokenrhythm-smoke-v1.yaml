@@ -1,0 +1,18 @@
+id: coding-tokenrhythm-smoke-v1
+# TODO(tokenrhythm): reuse the same frozen dataset as coding-smoke-v1 for the first smoke; regenerate
+# admission + baseline metadata for this eval id before a paid run.
+dataset: haifa/coding-smoke-v1-cpp-verifier-fixed@sha256:80302f17fa66fc5f08a72339635672594eaed941e6738aca627fa472dab52a79
+tasks:
+  - haifa/coding-smoke-cpp-gigasecond
+  - aider/polyglot_go_wordy
+  - aider/polyglot_java_circular-buffer
+  - aider/polyglot_javascript_grade-school
+  - aider/polyglot_python_hangman
+  - aider/polyglot_rust_xorcism
+attempts: 1
+timeoutMinutes: 20
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: deepseek-v4-flash
+    provider: tokenrhythm

@@ -30,6 +30,7 @@ MINIMUM_FREE_BYTES = 5 * 1024 * 1024 * 1024
 _DEEPSEEK_TARGET = "https://api.deepseek.com/"
 _CLIPROXYAPI_TARGET = "http://host.containers.internal:28317/v1/models"
 _CODEX_TARGET = "https://chatgpt.com/backend-api/codex"
+_TOKENRHYTHM_TARGET = "https://tokenrhythm.studio/v1"
 
 
 @dataclass(frozen=True)
@@ -109,8 +110,11 @@ def _provider_requirements(
         targets.add(_CLIPROXYAPI_TARGET)
     if "openai-codex" in providers:
         targets.add(_CODEX_TARGET)
+    if "tokenrhythm" in providers:
+        required_credentials.add("TR_API_KEY")
+        targets.add(_TOKENRHYTHM_TARGET)
     unsupported = sorted(
-        providers - {"deepseek", "aliyun-bailian", "cliproxyapi-antigravity", "openai-codex"}
+        providers - {"deepseek", "aliyun-bailian", "cliproxyapi-antigravity", "openai-codex", "tokenrhythm"}
     )
     if unsupported:
         return (

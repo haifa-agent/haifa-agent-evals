@@ -74,6 +74,19 @@ def _agent_config(candidate: Candidate, timeout_seconds: int) -> dict[str, objec
             "loopback_relay_host": "host.containers.internal",
             "loopback_relay_port": 28317,
         }
+    elif candidate.id == "haifa" and provider == "tokenrhythm":
+        result["env"] = {
+            "TR_API_KEY": "${TR_API_KEY}",
+            "HAIFA_MODEL_ID": candidate.model,
+        }
+        result["kwargs"] = {
+            "config_path": str(
+                Path(__file__).resolve().parent
+                / "integrations"
+                / "harbor"
+                / "haifa-eval-tokenrhythm.yaml"
+            )
+        }
     elif candidate.id == "haifa" and provider == "openai-codex":
         supported_codex_models = {"gpt-5.6-sol", "gpt-5.6-terra"}
         if candidate.model not in supported_codex_models:
