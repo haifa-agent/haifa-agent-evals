@@ -1,0 +1,21 @@
+[dataset]
+name = "haifa/coding-polyglot-contract-fidelity-4-v1"
+description = "Four high-confidence contract-fidelity regressions selected from the frozen 30-task coding set"
+authors = []
+keywords = []
+
+[[tasks]]
+name = "aider/polyglot_java_change"
+digest = "sha256:6b429b8851bd966ca3608a2f6f17ffdff910a814286d31b8309cb2a1f9534bdb"
+
+[[tasks]]
+name = "aider/polyglot_java_bottle-song"
+digest = "sha256:fd354827d05a8635973501f203a7f190917853705fc971110328396fdafc12fd"
+
+[[tasks]]
+name = "aider/polyglot_python_forth"
+digest = "sha256:2f5070809240c9ad84fc4d53fa9710984b0fe93f4600caad97788a187db55230"
+
+[[tasks]]
+name = "aider/polyglot_python_wordy"
+digest = "sha256:4ddf7ed61cd8febfc9a92362fd17c1fd7e5cf6bf87fd6f85025bd384bbf457ce"

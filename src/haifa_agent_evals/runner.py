@@ -134,7 +134,7 @@ def build_job_config(
         "job_name": work_dir.name,
         "jobs_dir": str(work_dir.parent.resolve()),
         "n_attempts": config.attempts,
-        "n_concurrent_trials": 1,
+        "n_concurrent_trials": config.concurrency,
         "quiet": False,
         "retry": {"max_retries": 0},
         "environment": environment,
@@ -355,6 +355,7 @@ def _write_inputs(
         "candidates": [asdict(candidate) for candidate in config.candidates],
         "attempts": config.attempts,
         "timeoutMinutes": config.timeout_minutes,
+        "concurrency": config.concurrency,
         "plannedTrials": [
             {"candidate": candidate.id, "taskId": task, "attempt": attempt}
             for candidate in config.candidates

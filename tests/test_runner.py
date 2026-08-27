@@ -65,6 +65,27 @@ def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:
     assert not any(path.name == "result.json" for path in tmp_path.rglob("result.json"))
 
 
+def test_builds_harbor_job_with_explicit_concurrency(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="concurrent-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a", "task-b"),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "provider/model"),),
+        concurrency=2,
+    )
+
+    assert build_job_config(config, tmp_path)["n_concurrent_trials"] == 2
+
+    work_dir = tmp_path / "run-concurrent"
+    run(config, work_dir, plan_only=True)
+    manifest = json.loads(
+        (tmp_path / "run-concurrent-run-manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["concurrency"] == 2
+
+
 def test_builds_bailian_haifa_agent_with_separate_config(tmp_path: Path) -> None:
     config = EvaluationConfig(
         id="bailian-smoke",

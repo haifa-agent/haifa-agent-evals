@@ -1,0 +1,42 @@
+id: coding-swebench-verified-balanced-30-gpt56-terra-v1
+dataset: swe-bench/swe-bench-verified@sha256:b934b0cc3dc800fe945eaf9f1623329db97ee3133c706d20644524c7759fb341
+datasetTrust: upstream-verified
+tasks:
+  - swe-bench/psf__requests-1142
+  - swe-bench/pallets__flask-5014
+  - swe-bench/pytest-dev__pytest-8399
+  - swe-bench/django__django-16950
+  - swe-bench/sympy__sympy-17630
+  - swe-bench/matplotlib__matplotlib-26342
+  - swe-bench/scikit-learn__scikit-learn-25102
+  - swe-bench/astropy__astropy-12907
+  - swe-bench/sphinx-doc__sphinx-8056
+  - swe-bench/pydata__xarray-4966
+  - swe-bench/astropy__astropy-7671
+  - swe-bench/astropy__astropy-8872
+  - swe-bench/django__django-14376
+  - swe-bench/django__django-15499
+  - swe-bench/matplotlib__matplotlib-22871
+  - swe-bench/matplotlib__matplotlib-24026
+  - swe-bench/psf__requests-1766
+  - swe-bench/psf__requests-6028
+  - swe-bench/pydata__xarray-7233
+  - swe-bench/pydata__xarray-7393
+  - swe-bench/pytest-dev__pytest-7236
+  - swe-bench/pytest-dev__pytest-5809
+  - swe-bench/scikit-learn__scikit-learn-12973
+  - swe-bench/scikit-learn__scikit-learn-14629
+  - swe-bench/sphinx-doc__sphinx-9367
+  - swe-bench/sphinx-doc__sphinx-9230
+  - swe-bench/sympy__sympy-20590
+  - swe-bench/sympy__sympy-20801
+  - swe-bench/mwaskom__seaborn-3187
+  - swe-bench/pylint-dev__pylint-7080
+attempts: 1
+timeoutMinutes: 20
+concurrency: 2
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: gpt-5.6-terra
+    provider: openai-codex

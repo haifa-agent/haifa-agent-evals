@@ -64,7 +64,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     return config, tasks, admission, task_digest
 
 
-def _inspected() -> dict[str, object]:
+def _inspected(working_dir: str = "/testbed") -> dict[str, object]:
     return {
         "Id": "sha256:image-id",
         "Digest": "sha256:image-digest",
@@ -74,7 +74,7 @@ def _inspected() -> dict[str, object]:
         "Size": 123,
         "Architecture": "amd64",
         "Os": "linux",
-        "Config": {"WorkingDir": "/testbed"},
+        "Config": {"WorkingDir": working_dir},
     }
 
 
@@ -82,7 +82,14 @@ def test_freeze_and_validate_swebench_environment(tmp_path: Path, monkeypatch) -
     config, tasks, admission, source_digest = _fixture(tmp_path)
     monkeypatch.setattr(environment_baseline, "_container_cli", lambda _value: "podman")
     monkeypatch.setattr(environment_baseline, "_image_inventory", lambda _cli: [])
-    monkeypatch.setattr(environment_baseline, "_inspect", lambda _cli, _image: _inspected())
+
+    def inspect(_cli: str, image: str) -> dict[str, object]:
+        inspected = _inspected()
+        if "@sha256:" not in image:
+            inspected["Digest"] = "sha256:tag-view-digest"
+        return inspected
+
+    monkeypatch.setattr(environment_baseline, "_inspect", inspect)
     monkeypatch.setattr(
         environment_baseline.subprocess,
         "run",
@@ -104,6 +111,7 @@ def test_freeze_and_validate_swebench_environment(tmp_path: Path, monkeypatch) -
     assert result["reused"] is False
     assert lock["sourceTaskDigests"] == {"swe-bench/psf__requests-1142": source_digest}
     assert lock["frozenTaskDigests"]["swe-bench/psf__requests-1142"].startswith("sha256:")
+    assert lock["images"]["swe-bench/psf__requests-1142"]["digest"] == "sha256:image-digest"
     assert "docker_image" in (frozen_task / "task.toml").read_text(encoding="utf-8")
     assert (
         environment_baseline.validate_environment_baseline(
@@ -114,6 +122,38 @@ def test_freeze_and_validate_swebench_environment(tmp_path: Path, monkeypatch) -
         )
         == lock
     )
+
+
+def test_freeze_accepts_trailing_slash_in_testbed_working_dir(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config, tasks, admission, _ = _fixture(tmp_path)
+    inventory = [
+        {
+            **_inspected("/testbed/"),
+            "RepoTags": ["docker.io/swebench/sweb.eval.x86_64.psf__requests-1142:latest"],
+        }
+    ]
+    monkeypatch.setattr(environment_baseline, "_container_cli", lambda _value: "podman")
+    monkeypatch.setattr(environment_baseline, "_image_inventory", lambda _cli: inventory)
+    monkeypatch.setattr(
+        environment_baseline, "_inspect", lambda _cli, _image: _inspected("/testbed/")
+    )
+    monkeypatch.setattr(
+        environment_baseline.subprocess,
+        "run",
+        lambda command, **_kwargs: CompletedProcess(command, 0),
+    )
+
+    result = environment_baseline.freeze_swebench_task_environments(
+        config,
+        tasks,
+        admission,
+        tmp_path / "baseline",
+        container_cli="podman",
+    )
+
+    assert result["reused"] is False
 
 
 def test_freeze_rejects_source_task_not_matching_admission(tmp_path: Path, monkeypatch) -> None:

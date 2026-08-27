@@ -111,6 +111,8 @@ def _parser() -> argparse.ArgumentParser:
     image_prepare.add_argument("--output", type=Path)
     image_prepare.add_argument("--image", default=DEFAULT_IMAGE)
     image_prepare.add_argument("--container-cli")
+    image_prepare.add_argument("--minimum-free-gb", type=float, default=0.0)
+    image_prepare.add_argument("--build-concurrency", type=int, default=1)
     image_freeze = image_commands.add_parser(
         "freeze-swebench", help="freeze verified SWE-bench tasks onto digest-pinned images"
     )
@@ -289,7 +291,9 @@ def main(argv: list[str] | None = None) -> int:
                     args.tasks_path,
                     args.output,
                     args.image,
-                    args.container_cli,
+                    container_cli=args.container_cli,
+                    minimum_free_bytes=int(args.minimum_free_gb * 1024**3),
+                    build_concurrency=args.build_concurrency,
                 ),
                 indent=2,
             )

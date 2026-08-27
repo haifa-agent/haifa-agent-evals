@@ -6,6 +6,68 @@ from subprocess import CompletedProcess
 import pytest
 
 from haifa_agent_evals import image_cache
+from haifa_agent_evals.config import Candidate, EvaluationConfig
+
+
+def test_generated_config_preserves_provider_and_concurrency() -> None:
+    source = EvaluationConfig(
+        id="source",
+        dataset="org/source@sha256:source",
+        tasks=("aider/task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "package:Haifa",
+                "gpt-5.6-terra",
+                "openai-codex",
+            ),
+        ),
+        concurrency=2,
+    )
+
+    generated = image_cache._generated_evaluation_config(
+        source,
+        "generated",
+        "org/generated@sha256:generated",
+    )
+
+    assert generated["concurrency"] == 2
+    assert generated["candidates"][0]["provider"] == "openai-codex"
+
+
+def test_generated_config_can_record_a_disk_guarded_task_subset() -> None:
+    source = EvaluationConfig(
+        id="source",
+        dataset="org/source@sha256:source",
+        tasks=("aider/task-a", "aider/task-b"),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "model"),),
+    )
+
+    generated = image_cache._generated_evaluation_config(
+        source,
+        "generated",
+        "org/generated@sha256:generated",
+        tasks=("aider/task-a",),
+    )
+
+    assert generated["tasks"] == ["aider/task-a"]
+
+
+def test_task_batches_preserve_order_at_requested_build_concurrency() -> None:
+    assert image_cache._task_batches(("a", "b", "c", "d", "e"), 3) == (
+        ("a", "b", "c"),
+        ("d", "e"),
+    )
+
+
+@pytest.mark.parametrize("value", [0, 17])
+def test_task_batches_reject_invalid_build_concurrency(value: int) -> None:
+    with pytest.raises(ValueError, match="build concurrency"):
+        image_cache._task_batches(("a",), value)
 
 
 def test_rejects_unpinned_java_archive(tmp_path: Path) -> None:
@@ -69,7 +131,7 @@ def test_agent_ready_dockerfile_copies_only_infrastructure() -> None:
     assert "/root/.gradle/wrapper" in generated
     assert "/root/.gradle/caches/modules-2" in generated
     assert "gradlew.haifa-real" in generated
-    assert '--offline \"$@\"' in generated
+    assert '--offline "$@"' in generated
     assert "/opt/haifa/offline/python-wheels" in generated
     assert "/root/.cargo" in generated
     assert "PIP_NO_INDEX=1" in generated
@@ -91,7 +153,7 @@ def test_agent_ready_dockerfile_can_replace_workspace_on_language_base() -> None
 
 def test_task_prebuilt_image_is_digest_pinned() -> None:
     generated = image_cache._task_with_prebuilt_image(
-        '[verifier]\ntimeout_sec = 60\n[environment]\ncpus = 1\n[verifier.env]\n',
+        "[verifier]\ntimeout_sec = 60\n[environment]\ncpus = 1\n[verifier.env]\n",
         "localhost/task@sha256:exact",
     )
 
@@ -187,7 +249,4 @@ def test_cached_language_image_can_recover_an_untagged_clean_base(tmp_path: Path
         }
     ]
 
-    assert (
-        image_cache._cached_language_image(source_task, inventory)
-        == "clean-language-image"
-    )
+    assert image_cache._cached_language_image(source_task, inventory) == "clean-language-image"

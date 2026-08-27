@@ -103,6 +103,10 @@ def _image_record(image_reference: str, inspected: dict[str, Any]) -> dict[str, 
     return record
 
 
+def _uses_testbed_working_dir(config: dict[str, Any]) -> bool:
+    return str(config.get("WorkingDir") or "").rstrip("/") == "/testbed"
+
+
 def _discover_source_image(task_slug: str, inventory: list[dict[str, Any]]) -> str:
     candidates: dict[str, dict[str, Any]] = {}
     for image in inventory:
@@ -110,7 +114,7 @@ def _discover_source_image(task_slug: str, inventory: list[dict[str, Any]]) -> s
         repo_tags = image.get("RepoTags") if isinstance(image.get("RepoTags"), list) else []
         history = image.get("NamesHistory") if isinstance(image.get("NamesHistory"), list) else []
         names = [*repo_tags, *history]
-        if config.get("WorkingDir") != "/testbed" or not any(
+        if not _uses_testbed_working_dir(config) or not any(
             task_slug in str(name) for name in names
         ):
             continue
@@ -260,7 +264,7 @@ def freeze_swebench_task_environments(
                 if isinstance(source_inspected.get("Config"), dict)
                 else {}
             )
-            if config_data.get("WorkingDir") != "/testbed":
+            if not _uses_testbed_working_dir(config_data):
                 raise ValueError(
                     f"source image does not use the SWE-bench /testbed workspace: {task}"
                 )
@@ -270,8 +274,9 @@ def freeze_swebench_task_environments(
                 f"task-{source_digest.removeprefix('sha256:')[:16]}"
             )
             subprocess.run([cli, "tag", source_image, stable_tag], check=True)  # noqa: S603
-            stable_inspected = _inspect(cli, stable_tag)
-            stable_reference = _pinned_reference(stable_tag, stable_inspected)
+            tagged_inspected = _inspect(cli, stable_tag)
+            stable_reference = _pinned_reference(stable_tag, tagged_inspected)
+            stable_inspected = _inspect(cli, stable_reference)
 
             frozen_task = staging_tasks / slug
             shutil.copytree(source_task, frozen_task)

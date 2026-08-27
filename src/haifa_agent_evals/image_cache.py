@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -527,18 +528,36 @@ def _generated_evaluation_config(
     source: EvaluationConfig,
     generated_id: str,
     dataset: str,
+    tasks: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
+    candidates: list[dict[str, str]] = []
+    for candidate in source.candidates:
+        generated_candidate = {
+            "id": candidate.id,
+            "agent": candidate.agent,
+            "model": candidate.model,
+        }
+        if candidate.provider is not None:
+            generated_candidate["provider"] = candidate.provider
+        candidates.append(generated_candidate)
     return {
         "id": generated_id,
         "dataset": dataset,
-        "tasks": list(source.tasks),
+        "tasks": list(source.tasks if tasks is None else tasks),
         "attempts": source.attempts,
         "timeoutMinutes": source.timeout_minutes,
-        "candidates": [
-            {"id": candidate.id, "agent": candidate.agent, "model": candidate.model}
-            for candidate in source.candidates
-        ],
+        "concurrency": source.concurrency,
+        "candidates": candidates,
     }
+
+
+def _task_batches(tasks: tuple[str, ...], build_concurrency: int) -> tuple[tuple[str, ...], ...]:
+    if build_concurrency < 1 or build_concurrency > 16:
+        raise ValueError("build concurrency must be between 1 and 16")
+    return tuple(
+        tasks[index : index + build_concurrency]
+        for index in range(0, len(tasks), build_concurrency)
+    )
 
 
 def prepare_task_images(
@@ -547,6 +566,8 @@ def prepare_task_images(
     output: Path | None = None,
     infra_image: str = DEFAULT_IMAGE,
     container_cli: str | None = None,
+    minimum_free_bytes: int = 0,
+    build_concurrency: int = 1,
 ) -> dict[str, Any]:
     from haifa_agent_evals.runner import _validate_local_dataset
 
@@ -585,13 +606,18 @@ def prepare_task_images(
         raise ValueError("task image output exists but is incomplete")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
+    if minimum_free_bytes < 0:
+        raise ValueError("minimum free bytes must not be negative")
     staging = Path(tempfile.mkdtemp(prefix=f"{generated_id}-", dir=destination.parent))
     generated_tasks = staging / "tasks"
     generated_tasks.mkdir()
     inventory = _image_inventory(cli)
     task_refs: list[DatasetTaskRef] = []
     images: list[dict[str, str]] = []
-    for task_name in config.tasks:
+    prepared_tasks: list[str] = []
+    disk_guard_triggered = False
+
+    def prepare_task(task_name: str) -> tuple[DatasetTaskRef, dict[str, str]]:
         slug = task_name.rsplit("/", 1)[-1]
         source_task = source_tasks / slug
         generated_task = generated_tasks / slug
@@ -654,8 +680,34 @@ def prepare_task_images(
             encoding="utf-8",
         )
         task_digest = f"sha256:{Packager.compute_content_hash(generated_task)[0]}"
-        task_refs.append(DatasetTaskRef(name=task_name, digest=task_digest))
-        images.append({"task": task_name, "image": image_reference, "digest": task_digest})
+        return (
+            DatasetTaskRef(name=task_name, digest=task_digest),
+            {"task": task_name, "image": image_reference, "digest": task_digest},
+        )
+
+    for batch in _task_batches(config.tasks, build_concurrency):
+        eligible: list[str] = []
+        for task_name in batch:
+            if (
+                minimum_free_bytes > 0
+                and shutil.disk_usage(destination.parent).free <= minimum_free_bytes
+            ):
+                disk_guard_triggered = True
+                break
+            eligible.append(task_name)
+        if not eligible:
+            break
+        with ThreadPoolExecutor(max_workers=len(eligible)) as executor:
+            results = tuple(executor.map(prepare_task, eligible))
+        for task_name, (task_ref, image) in zip(eligible, results, strict=True):
+            task_refs.append(task_ref)
+            images.append(image)
+            prepared_tasks.append(task_name)
+        if disk_guard_triggered:
+            break
+
+    if not prepared_tasks:
+        raise ValueError("disk free-space guard prevented every task image from being prepared")
 
     source_dataset_name = config.dataset.rsplit("@", 1)[0]
     dataset_name = f"{source_dataset_name}-agent-infra-v4"
@@ -672,7 +724,12 @@ def prepare_task_images(
     generated_config_path = staging / f"{generated_id}.yaml"
     generated_config_path.write_text(
         yaml.safe_dump(
-            _generated_evaluation_config(config, generated_id, dataset),
+            _generated_evaluation_config(
+                config,
+                generated_id,
+                dataset,
+                tasks=tuple(prepared_tasks),
+            ),
             sort_keys=False,
         ),
         encoding="utf-8",
@@ -684,6 +741,12 @@ def prepare_task_images(
         "infraImage": infra_reference,
         "dataset": dataset,
         "images": images,
+        "requestedTaskCount": len(config.tasks),
+        "preparedTaskCount": len(prepared_tasks),
+        "diskGuardTriggered": disk_guard_triggered,
+        "minimumFreeBytes": minimum_free_bytes,
+        "buildConcurrency": build_concurrency,
+        "freeBytesAfter": shutil.disk_usage(destination.parent).free,
         "reused": False,
     }
     (staging / "images.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")

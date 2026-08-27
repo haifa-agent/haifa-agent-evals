@@ -7,7 +7,7 @@ from typing import Any
 import yaml
 
 _REQUIRED_EVAL_FIELDS = {"id", "dataset", "tasks", "attempts", "timeoutMinutes", "candidates"}
-_OPTIONAL_EVAL_FIELDS = {"datasetTrust"}
+_OPTIONAL_EVAL_FIELDS = {"datasetTrust", "concurrency"}
 _CANDIDATE_FIELDS = {"id", "agent", "model", "provider"}
 _FLOATING_DATASET_REFS = {"latest", "main", "head"}
 _SAFE_ID_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
@@ -40,6 +40,7 @@ class EvaluationConfig:
     timeout_minutes: int
     candidates: tuple[Candidate, ...]
     dataset_trust: str = PER_TASK_CALIBRATED
+    concurrency: int = 1
 
 
 def _mapping(value: Any, label: str) -> dict[str, Any]:
@@ -120,10 +121,18 @@ def load_config(path: Path) -> EvaluationConfig:
 
     attempts = raw["attempts"]
     timeout = raw["timeoutMinutes"]
+    concurrency = raw.get("concurrency", 1)
     if attempts != 1 or isinstance(attempts, bool):
         raise ValueError("MVP supports exactly one attempt per candidate/task")
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout < 1:
         raise ValueError("timeoutMinutes must be a positive integer")
+    if (
+        not isinstance(concurrency, int)
+        or isinstance(concurrency, bool)
+        or concurrency < 1
+        or concurrency > 16
+    ):
+        raise ValueError("concurrency must be an integer between 1 and 16")
 
     return EvaluationConfig(
         id=_safe_id(raw["id"], "id"),
@@ -133,4 +142,5 @@ def load_config(path: Path) -> EvaluationConfig:
         timeout_minutes=timeout,
         candidates=tuple(candidates),
         dataset_trust=dataset_trust,
+        concurrency=concurrency,
     )

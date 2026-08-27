@@ -58,7 +58,8 @@ uv run evals finalize --config evals/coding-smoke-v1.yaml \
 uv run evals image seed-aider --container <stopped-aider-trial-container-id>
 uv run evals image build --java-archive /path/to/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz
 uv run evals image check
-uv run evals image prepare-tasks --config evals/coding-smoke-v1.yaml --tasks-path work/tasks/derived
+uv run evals image prepare-tasks --config evals/coding-smoke-v1.yaml --tasks-path work/tasks/derived \
+  --minimum-free-gb 50 --build-concurrency 3
 uv run evals infra proxy start --source-port 2081
 uv run evals infra check --output work/gates/infrastructure/harbor-compose-network.json
 uv run pytest
@@ -78,11 +79,37 @@ Smoke 结果不得解释为 SWE-bench 分数估计。
 `agent_clean_exit`、`failure_stage` 等字段是正交诊断维度，只解释运行是否有效及失败发生在哪一层，
 不得反向改写正式成绩。
 
+评测配置可通过可选的 `concurrency` 字段设置 Harbor Trial 并发度；默认值仍为 `1`，允许范围为
+`1..16`。提高并发前必须确认 Provider 配额、容器内存、磁盘和代理链路均有余量，并在 Run Manifest
+中保留实际并发值。大规模付费评测应从 `2` 开始验证，不能仅为缩短耗时直接提高到机器上限。
+
 `doctor` 只做只读检查：准入证据、Dataset/Task digest、Harbor 版本、容器连接、JAR smoke、
 Credential 变量存在性、磁盘和 Python 版本。配置 Harbor Compose overlay 时，它还要求一份未过期且
 与 overlay、代理端点和容器后端完全匹配的真实 Compose 网络预检证据。它不会打印 Credential 值，
 也不会下载镜像或调用模型。
 非 `--plan-only` 的 `run` 会自动执行同一门禁；任一必需项失败时返回 2，不启动 Harbor。
+
+## 固定 30 题一键就绪检查
+
+当前 SWE-bench Verified 30 题可以在不调用付费模型的前提下，一次检查 Task 集合、Admission、
+冻结 Task/OCI digest、本机镜像、固定 JDK、Haifa JAR、Codex OAuth、Podman、代理链、真实 Harbor
+Compose 网络、Harbor/Python 版本和 50 GiB 磁盘余量：
+
+```powershell
+.\scripts\check-swebench-ready.ps1 --refresh-network
+```
+
+Linux/macOS 使用同参数的 `./scripts/check-swebench-ready.sh`。命令输出 `READY` 且退出码为 `0` 才能
+开始正式评测；`BLOCKED` 返回 `2`。`--refresh-network` 会启动一个 Oracle 基础设施任务，生成 30 分钟
+有效的真实 Compose 网络证据，但不会调用模型。若本地代理三段链路尚未启动，可同时传
+`--start-proxy`；默认只检查现有 relay，不静默创建后台进程。报告写入
+`work/gates/readiness/<eval-id>.json`，不记录凭据内容。
+
+冻结 Task 镜像不包含模型名、Provider 凭据或模型权重。只更换模型时无需重建 30 个 OCI 镜像；
+但 Admission 和 `task-environment-lock.json` 当前绑定 `evalId`。为新模型使用新的 eval ID 时，应为
+新配置重新生成匹配的 Admission 与 baseline 元数据，可以复用相同 OCI digest，不需要重新构建镜像层。
+只有题目/Verifier、系统依赖、基础镜像、CPU 架构，或 Agent 在容器内所需运行时发生变化，才需要
+重新制作相应 Task 镜像。
 
 默认运行目录是 `work/runs/evaluations/<eval-id>/<UTC-time>-<random>/`。每次运行同时生成唯一的
 `*-run-manifest.json`，记录计划矩阵和配置/Dataset/Task/JAR/准入/preflight 摘要；已存在的 Run ID
@@ -138,6 +165,12 @@ Haifa adapter 会先探测镜像中的 Java 21，再决定是否上传 JDK；固
 
 `image prepare-tasks` 完成上述转换：它先验证原始冻结数据集，并按 `/app` 文件内容匹配本机已经成功构建的 Harbor 题目镜像；随后从这些镜像复用语言工具链与 workspace，再叠加固定 Agent 基础设施，全程不重新下载语言依赖。生成镜像使用 RepoDigest 写入新的 `task.toml`，最后生成新的任务摘要、数据集摘要和 eval 配置。输出默认位于
 `work/cache/images/task-environments/coding-smoke-v1-agent-infra-v4/`。
+
+大批量准备可通过 `--minimum-free-gb` 设置目标盘硬门禁。工具在开始下一道题前检查输出盘可用空间；
+达到门禁后不再构建新镜像，并用已经完整冻结的题目生成可用的部分 Dataset Manifest 与 eval 配置。
+`images.json` 记录请求/完成题数、门禁是否触发及结束时剩余字节，不能把未完成 staging 当成已冻结题目。
+`--build-concurrency` 独立控制本地镜像构建并发，默认仍为 1，允许 1 到 16；它不改变正式模型 Trial
+的 `concurrency`。磁盘门禁在每批提交前检查，达到门禁后不会提交下一批，已在运行的构建会完成。
 
 SWE-bench Verified 使用独立的环境冻结入口。它只接受与 upstream admission 中 Task digest
 完全一致的 Registry Task 包，把一次成功构建的 `/testbed` 镜像重标记到稳定本地仓库名，并把

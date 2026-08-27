@@ -31,6 +31,23 @@ def test_loads_minimal_config(tmp_path: Path) -> None:
     assert config.tasks == ("task-a", "task-b")
     assert config.candidates[0].provider is None
     assert config.dataset_trust == "per-task-calibrated"
+    assert config.concurrency == 1
+
+
+def test_loads_explicit_concurrency(tmp_path: Path) -> None:
+    config = load_config(
+        _write(tmp_path, BASE.replace("attempts: 1", "attempts: 1\nconcurrency: 2"))
+    )
+
+    assert config.concurrency == 2
+
+
+@pytest.mark.parametrize("value", ["0", "17", "true", "two"])
+def test_rejects_invalid_concurrency(tmp_path: Path, value: str) -> None:
+    with pytest.raises(ValueError, match="concurrency"):
+        load_config(
+            _write(tmp_path, BASE.replace("attempts: 1", f"attempts: 1\nconcurrency: {value}"))
+        )
 
 
 def test_loads_upstream_verified_dataset_trust(tmp_path: Path) -> None:

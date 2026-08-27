@@ -1,0 +1,490 @@
+# Dataset manifest for haifa/gpt56-terra-polyglot-new-120-source-v1
+# Add tasks using: harbor add <org>/<name>
+# Publish using: harbor publish
+
+[dataset]
+name = "haifa/gpt56-terra-polyglot-new-120-source-v1"
+description = "Deterministic 20-per-language sample excluding the prior frozen 30-task set"
+authors = []
+keywords = []
+
+[[tasks]]
+name = "aider/polyglot_cpp_all-your-base"
+digest = "sha256:e746d89e81247f776b2185043e850df20ba298fa72fa1700f114b5930473c0a7"
+
+[[tasks]]
+name = "aider/polyglot_cpp_allergies"
+digest = "sha256:d1e8539a70bf112a15546a881893e5404c7fb878535c3818fdc55ef95b57720c"
+
+[[tasks]]
+name = "aider/polyglot_cpp_bank-account"
+digest = "sha256:1c4e523c501ee82de945da7c36f2f3e6fc75fe865a0b95c2182f2b47b7627774"
+
+[[tasks]]
+name = "aider/polyglot_cpp_circular-buffer"
+digest = "sha256:3f4ac5558ba301b2ac893b0df649ae6542ec3c938df3b7d87c3b85855059e7c3"
+
+[[tasks]]
+name = "aider/polyglot_cpp_clock"
+digest = "sha256:9b4f423aed5b06a74fb087750dc2292858283c75a5182ec053a22e62f81100c1"
+
+[[tasks]]
+name = "aider/polyglot_cpp_complex-numbers"
+digest = "sha256:36abb0764d418486145430dfb3b579636e714ebbbaf467d59a5b3c4eb1d3a4b8"
+
+[[tasks]]
+name = "aider/polyglot_cpp_diamond"
+digest = "sha256:25623a50d2c7e8471c0d28fccc529775019b7285bbc57d8bb7935a2965c5a5a1"
+
+[[tasks]]
+name = "aider/polyglot_cpp_dnd-character"
+digest = "sha256:0dec87b85ec515f4b19c4f351b7939507e22b6a63b5d9f32d1841c8def9dd7ed"
+
+[[tasks]]
+name = "aider/polyglot_cpp_gigasecond"
+digest = "sha256:09aff14c8ac26188786b56428b9656ff68d780771f65c16ce578729a383d8075"
+
+[[tasks]]
+name = "aider/polyglot_cpp_grade-school"
+digest = "sha256:3842db0938f7007e632286a35e46e35e3e9495b4fe54892239c2d9b06697b319"
+
+[[tasks]]
+name = "aider/polyglot_cpp_kindergarten-garden"
+digest = "sha256:47b07dd2ad479ec7d78cd6f9b46decc9721d2429803bae4fe941d5d2a72ba2bc"
+
+[[tasks]]
+name = "aider/polyglot_cpp_linked-list"
+digest = "sha256:272e896a2f5725f80d9b8aa13b1e63c30977e976005fa56426f582bbbfa71808"
+
+[[tasks]]
+name = "aider/polyglot_cpp_meetup"
+digest = "sha256:0978b14aebd9c15e2b60bde5d8fcb6babba7ae96dd48891e4969be2b0f1d7d6a"
+
+[[tasks]]
+name = "aider/polyglot_cpp_parallel-letter-frequency"
+digest = "sha256:f7a23ff5174e59666e60a52d84809fbdb09d581d0c02c02b33ebda7a551b0576"
+
+[[tasks]]
+name = "aider/polyglot_cpp_robot-name"
+digest = "sha256:1757943ddf9d0575b2041ed0b9728d29ba9455bf883a3aaef36c902d04e9dbf8"
+
+[[tasks]]
+name = "aider/polyglot_cpp_space-age"
+digest = "sha256:fbf49efc3fee0cb657fd0fd3febdb6d5c48051120b9ba1664e8d696a983e826d"
+
+[[tasks]]
+name = "aider/polyglot_cpp_spiral-matrix"
+digest = "sha256:0a8b0f865fbd90daf3b7f867753db724b7b9717395cb7265e78950f754570093"
+
+[[tasks]]
+name = "aider/polyglot_cpp_sublist"
+digest = "sha256:078de48289065ba5de291807f4a1ea0382bd4db1b11f00dbfc0d2d4ffb7bf3bd"
+
+[[tasks]]
+name = "aider/polyglot_cpp_yacht"
+digest = "sha256:fcab18c7a7956bbb6b7c805e989578b648c9e30b0bb5eb633fa4d0cdc050110a"
+
+[[tasks]]
+name = "aider/polyglot_cpp_zebra-puzzle"
+digest = "sha256:08b1814b1fb092ad68b5d30bea4461b02df0a53cb8e1e280b0f04f292c6f36f0"
+
+[[tasks]]
+name = "aider/polyglot_go_beer-song"
+digest = "sha256:9eb29a383901b0f7a49ebef25ecc8165f94c10f1a4fb11c06e6dd7044de6ad2c"
+
+[[tasks]]
+name = "aider/polyglot_go_book-store"
+digest = "sha256:223967e7fd8b6579df367792373be238dc31e6c2ff47c4c454faee929737d563"
+
+[[tasks]]
+name = "aider/polyglot_go_bowling"
+digest = "sha256:03c3c40455236ebc6081334695fa64a8fe4fe044ccc0f069139b66c21b0a9598"
+
+[[tasks]]
+name = "aider/polyglot_go_crypto-square"
+digest = "sha256:a1059b3db111e4783527a0d85a6fea71f8fde21b93d8a90dd75ef830ffe2809b"
+
+[[tasks]]
+name = "aider/polyglot_go_forth"
+digest = "sha256:3caafe7c454c1adb1279fb23a15761952ce2f729b0c81afd3b83df311fa4d4cf"
+
+[[tasks]]
+name = "aider/polyglot_go_hexadecimal"
+digest = "sha256:e5cb3ca67b505554355e78817a124a8ef5a80757f291474bbc21db4255c070d4"
+
+[[tasks]]
+name = "aider/polyglot_go_sublist"
+digest = "sha256:8a24e67f79532ccdc14441baf8251880e6a5532f131133e6735dc735c5d74c83"
+
+[[tasks]]
+name = "aider/polyglot_go_word-search"
+digest = "sha256:802344941ae3c8d0e5fc2553e7a7412a7f597cc8b8945369567f37d1de38e654"
+
+[[tasks]]
+name = "aider/polyglot_go_matrix"
+digest = "sha256:c528a50131cce9c2a4705a44f6cc18ac69d05b3c819b8d2a6eaf9fed991c6e03"
+
+[[tasks]]
+name = "aider/polyglot_go_paasio"
+digest = "sha256:424e5c83a4a1f1537dda53214f9227e11b4d24625a0bc0a793a571f15866e31b"
+
+[[tasks]]
+name = "aider/polyglot_go_palindrome-products"
+digest = "sha256:8a2729764f9ccf49575d7286b70d36c768844634ae4ee1eb2e76b761d84d0ae2"
+
+[[tasks]]
+name = "aider/polyglot_go_pig-latin"
+digest = "sha256:fb802096b456ffbb1ebd852d9d8d7f824543f0de0abe3f7e1ec641291cdc5638"
+
+[[tasks]]
+name = "aider/polyglot_go_protein-translation"
+digest = "sha256:6ba5395f4d57b43ee9d5f3d974f7120be8d9ea09e7c0e79ae2a486cb441e182f"
+
+[[tasks]]
+name = "aider/polyglot_go_robot-simulator"
+digest = "sha256:accf25239f2bff57688e10810b1e859eec42118efc6606f863eba2b397e08095"
+
+[[tasks]]
+name = "aider/polyglot_go_scale-generator"
+digest = "sha256:f458681cd1dfc36bdb3a72e6fc026b86fc3926ea604cbc4a7185be627cdc42ac"
+
+[[tasks]]
+name = "aider/polyglot_go_transpose"
+digest = "sha256:bd77f54ef77e73cd421f7242914c6bf6a6e98c8a8f7e8abeab745904396b2e5e"
+
+[[tasks]]
+name = "aider/polyglot_go_tree-building"
+digest = "sha256:5206a2107347aeeeb721df69e8ce5073cb13d912e3b3a658b0bac8859735ee4a"
+
+[[tasks]]
+name = "aider/polyglot_go_trinary"
+digest = "sha256:8c45c2349a2e80949aaf5a6a5d0aeca01a45ae07fbef6bd45dccb508ce9a2bf7"
+
+[[tasks]]
+name = "aider/polyglot_go_two-bucket"
+digest = "sha256:aa3f110aca3f82d2d0911d3412e2d5e9565a780820fdd7d2f3b7d4f0935634b1"
+
+[[tasks]]
+name = "aider/polyglot_go_variable-length-quantity"
+digest = "sha256:554f29613dfd8c10430b57398b18b54e8b49bd3630b3ff5c58127b74143570b0"
+
+[[tasks]]
+name = "aider/polyglot_java_alphametics"
+digest = "sha256:0f2f785fba6ec3cd51c614ef18fd5d33f9f1a3fde1990431f5d8580ba7684b83"
+
+[[tasks]]
+name = "aider/polyglot_java_bank-account"
+digest = "sha256:8d86e9e812e6666a64671a4095e7589449a68d35b0986df3f03476549b398b32"
+
+[[tasks]]
+name = "aider/polyglot_java_food-chain"
+digest = "sha256:21568ba717082a721c58ffd6d9226cbac109877ca4549d6f274990900f587f0a"
+
+[[tasks]]
+name = "aider/polyglot_java_forth"
+digest = "sha256:5aab1c21fbb41e611a92905674e10a9c318033f28591f09a47b53cce1df01a73"
+
+[[tasks]]
+name = "aider/polyglot_java_house"
+digest = "sha256:9355d4c72fe2c68a0579a57bc246628db7e5873afcc9aa33809c8e9d41e6ff91"
+
+[[tasks]]
+name = "aider/polyglot_java_kindergarten-garden"
+digest = "sha256:7f4c81e968226bf4f512c6fdb26d96296cffcd6c93afe4c9fdd31fb269b98fde"
+
+[[tasks]]
+name = "aider/polyglot_java_ledger"
+digest = "sha256:d5f55f9b9bbb53ed005189d6622de78461458f682d04a39f10268ebc519b7cc8"
+
+[[tasks]]
+name = "aider/polyglot_java_ocr-numbers"
+digest = "sha256:8f69db93494556b7f10911964a0b146d1bfee61db92c57d8d7ac45a66fcabe84"
+
+[[tasks]]
+name = "aider/polyglot_java_pig-latin"
+digest = "sha256:168854683de1098b095b45eca15f36b30eefd7ee70e8db1a47eff2c0e2a4cb7d"
+
+[[tasks]]
+name = "aider/polyglot_java_poker"
+digest = "sha256:5141478c4bfb16fa01a916ffd5b8647dce5c10f0e409444038c2cef5aeeca3d9"
+
+[[tasks]]
+name = "aider/polyglot_java_pov"
+digest = "sha256:2aab996f0b96e97d6947c35b687fbd7064f882c6421cb9c553dd795ec1aef811"
+
+[[tasks]]
+name = "aider/polyglot_java_pythagorean-triplet"
+digest = "sha256:c51d55c275d26386314eebf0ef54ea6a64a6296bf9270a027714a2518495648d"
+
+[[tasks]]
+name = "aider/polyglot_java_rational-numbers"
+digest = "sha256:2f55fd45bbfe2cce3608011efef9fcd244251125cd629885883653346d492e82"
+
+[[tasks]]
+name = "aider/polyglot_java_state-of-tic-tac-toe"
+digest = "sha256:396c32ee6291ce029df64a27f902dcc45a2c88ec5f5b402dd65a744ae1ad1092"
+
+[[tasks]]
+name = "aider/polyglot_java_tree-building"
+digest = "sha256:ed5f444c569657a89f97b6d848d9ca2de55601e3881b777339282131c83644a9"
+
+[[tasks]]
+name = "aider/polyglot_java_twelve-days"
+digest = "sha256:0b6cc5eb9eef7d5a422e1c5dc43287c90c50f61b8b103e9e903c18668f50181c"
+
+[[tasks]]
+name = "aider/polyglot_java_two-bucket"
+digest = "sha256:43ab7ef6e9b632fad5a13e7aac24ef6691c6f001731d6080e6d70786bfdf2bbc"
+
+[[tasks]]
+name = "aider/polyglot_java_variable-length-quantity"
+digest = "sha256:0ab9c576086143a61f5cf3987cfe815ddc9497f423e552ec23469c25eef099d8"
+
+[[tasks]]
+name = "aider/polyglot_java_wordy"
+digest = "sha256:1289b4bb9b2de6e993411c8f8972d6c65c4b58b2c58ceedf7803811d3aaae72a"
+
+[[tasks]]
+name = "aider/polyglot_java_zipper"
+digest = "sha256:93e5fe4e4d2405daad2c41ea44f5f0739f34b071d508c9b8415f213f4bc62d4c"
+
+[[tasks]]
+name = "aider/polyglot_javascript_beer-song"
+digest = "sha256:e6498b7a01e7ccad3b535907734c8e44af8d11c522d04ace6cdb42c6bc59958b"
+
+[[tasks]]
+name = "aider/polyglot_javascript_binary"
+digest = "sha256:8e612572dbafbb1afd4bb445136f5f9add9c2a475efdfebe93fb3949d308d44d"
+
+[[tasks]]
+name = "aider/polyglot_javascript_book-store"
+digest = "sha256:af6bd77e764d6afff6947eb3b51155fc89bda976cd24050a7e063f817db6695d"
+
+[[tasks]]
+name = "aider/polyglot_javascript_bottle-song"
+digest = "sha256:8de2e73925c08760ead95dec632a406e6c1344858eec443b92182f34bf6a0337"
+
+[[tasks]]
+name = "aider/polyglot_javascript_complex-numbers"
+digest = "sha256:5cb42bbcad1cfc73d5bab31887713c236999c51f848e3820c1b711034c316beb"
+
+[[tasks]]
+name = "aider/polyglot_javascript_connect"
+digest = "sha256:ee04490e6d7eb33901cbd978301970c28901254ae7933ddecc1cf8fe4e3d0b37"
+
+[[tasks]]
+name = "aider/polyglot_javascript_food-chain"
+digest = "sha256:b2a8c824f392296d624436cb0aeb51f7fa36bbff01dae0692c8b831c15308023"
+
+[[tasks]]
+name = "aider/polyglot_javascript_go-counting"
+digest = "sha256:74f9a25c53b4823580531ffbd71fb6e76864e81252c6a2ad88aad0e8bf286179"
+
+[[tasks]]
+name = "aider/polyglot_javascript_house"
+digest = "sha256:2b7878a9420e45f1d2ed4a5c77659e44b639ef8dac054ac9dbcc976e5f1ec716"
+
+[[tasks]]
+name = "aider/polyglot_javascript_list-ops"
+digest = "sha256:875068bfd78e5968a8b9d1739d0cd7ebe8ea1693b3fee29f2218c8ff965df3ca"
+
+[[tasks]]
+name = "aider/polyglot_javascript_ocr-numbers"
+digest = "sha256:a31ee1c946f0f3d5c377a2e3924c40f0ae9965a2d46fc75e84d3a342efb4dd88"
+
+[[tasks]]
+name = "aider/polyglot_javascript_robot-name"
+digest = "sha256:462a142de3915765607fa719b9463e47178550d40c03607f1c98c73429c3901a"
+
+[[tasks]]
+name = "aider/polyglot_javascript_say"
+digest = "sha256:bea5f6c96e186e902e99eb672e345dafff64a434d9ebfd9b7b5c45a55f108f8d"
+
+[[tasks]]
+name = "aider/polyglot_javascript_scale-generator"
+digest = "sha256:09f9a91e8bfe7f730e155f26a502e0a7bd7a14458a35aaa621fcef49155b1105"
+
+[[tasks]]
+name = "aider/polyglot_javascript_sum-of-multiples"
+digest = "sha256:f357c984889de7c61d9818a5d4cd2750a9c1b2c3956e0856c98cbbed136c6bab"
+
+[[tasks]]
+name = "aider/polyglot_javascript_transpose"
+digest = "sha256:699fbf17d2bb8ca41934b0126cb9c31f7a58ed51b7bc3d48787ec43ba090f611"
+
+[[tasks]]
+name = "aider/polyglot_javascript_triangle"
+digest = "sha256:d78ac7366427305eb67c9712e7e9427e2bcec919cafcccfe2ee1378764488034"
+
+[[tasks]]
+name = "aider/polyglot_javascript_twelve-days"
+digest = "sha256:9d96fb76235452a5e115f6987983a09047fbcda029c72b81c02091cba5673d7c"
+
+[[tasks]]
+name = "aider/polyglot_javascript_variable-length-quantity"
+digest = "sha256:b394e809a00a71a1f0c850dd295ab332022836ada11e4d40c0f901e2776cc2e7"
+
+[[tasks]]
+name = "aider/polyglot_javascript_word-search"
+digest = "sha256:7b730abc5a9ec38f8efa8083c4b9ca62cc332be6a3987d82914bca251a6c547f"
+
+[[tasks]]
+name = "aider/polyglot_python_affine-cipher"
+digest = "sha256:a72b6a5cd3f45ac30abf68af2a94008d3b99050903e016d9333b6b1e74c36404"
+
+[[tasks]]
+name = "aider/polyglot_python_bottle-song"
+digest = "sha256:1383b288acbb13efa7056dac8a54b0ba32fad7e3e096d4bf71cd0d3604f95875"
+
+[[tasks]]
+name = "aider/polyglot_python_connect"
+digest = "sha256:1d0ddee99816889f2ee26a0f5fe0a08879353f3fe50d6d579a17ea263d4957b9"
+
+[[tasks]]
+name = "aider/polyglot_python_dominoes"
+digest = "sha256:ccec5ef79be7e142518bbac869a157bf00e1fb341201c0f7b8a36a2c7a40c8d7"
+
+[[tasks]]
+name = "aider/polyglot_python_dot-dsl"
+digest = "sha256:1798c2bd7c4f842ab560e93d21c97a26254e8c8621b7eaeed288497e845e1875"
+
+[[tasks]]
+name = "aider/polyglot_python_food-chain"
+digest = "sha256:bfa87bdacf35e504bdb22c6be3da970f77a57f3e45a4d7c1a0f2d1949ad88e66"
+
+[[tasks]]
+name = "aider/polyglot_python_go-counting"
+digest = "sha256:53590da5359b30ac06471eaa58bf531244d1363a7e7286f4b9fb2358ded914cb"
+
+[[tasks]]
+name = "aider/polyglot_python_grade-school"
+digest = "sha256:c4c23a01b9ca0d7afc8b5ab2bdc2e37dcb4e2319f6189e6080d2640db5dd2f42"
+
+[[tasks]]
+name = "aider/polyglot_python_grep"
+digest = "sha256:c55eee8b53928105b9a1ac14b790d7b8edf35c016ceb63738bb8cf3ffa5010d8"
+
+[[tasks]]
+name = "aider/polyglot_python_list-ops"
+digest = "sha256:afb57b3ee35d1539bb9d16f11f8d1253f59a45217784f3f2afb4aa7b7aab5666"
+
+[[tasks]]
+name = "aider/polyglot_python_phone-number"
+digest = "sha256:6339e7e8b18d91ed316796c301ff1ce39c57ed6f809f903b6812f9e4401f44b0"
+
+[[tasks]]
+name = "aider/polyglot_python_pig-latin"
+digest = "sha256:721e7cefcc8f45e219e097b15b3c53b7e5cefa3706f456f9362d3ebe4d7c8d15"
+
+[[tasks]]
+name = "aider/polyglot_python_proverb"
+digest = "sha256:3c493a3bab8af7e3c4f8de3f93d188579a61939462fe0b725a13f084df58beed"
+
+[[tasks]]
+name = "aider/polyglot_python_react"
+digest = "sha256:238e22cbbfd0142fd77b72bc8baf131cd5e6984f7233ce5591a47228dd0fed12"
+
+[[tasks]]
+name = "aider/polyglot_python_robot-name"
+digest = "sha256:ad0cd72cca8f1b7b7557550ce0bb809953156e266a2ef3a840bbedc2819353dd"
+
+[[tasks]]
+name = "aider/polyglot_python_sgf-parsing"
+digest = "sha256:5eb9418989bd56962f1637cfa4ed49f01e15cb9025bea6b3f025830e5180e5dd"
+
+[[tasks]]
+name = "aider/polyglot_python_simple-linked-list"
+digest = "sha256:8471cdadb69402db367c9cf5a099139eb9cb33004eb0d8c06d3a16aa704d4ef0"
+
+[[tasks]]
+name = "aider/polyglot_python_transpose"
+digest = "sha256:3762057ac3e2f215232438a627eaaff163460cb87f2ff84791f4d5180d20d4f3"
+
+[[tasks]]
+name = "aider/polyglot_python_variable-length-quantity"
+digest = "sha256:34dbe2c5a18e3864ce8025ce2cc427e51f952dca0b79d589fe11f5fbfd55bb28"
+
+[[tasks]]
+name = "aider/polyglot_python_zebra-puzzle"
+digest = "sha256:4e59ba6e025930fac52cb6682f2f422c12874ec166b5d6f64d57b8b7e61f3c3d"
+
+[[tasks]]
+name = "aider/polyglot_rust_accumulate"
+digest = "sha256:ca84ccc7eec840e3a6d0e86c9555382f17d225c7701a1e57c117c19d18af0462"
+
+[[tasks]]
+name = "aider/polyglot_rust_book-store"
+digest = "sha256:5bbf7ece818881c4e53f4f407a4b99994f3ce409457fe0d171c060a273c24450"
+
+[[tasks]]
+name = "aider/polyglot_rust_dot-dsl"
+digest = "sha256:2a5045eaf5f66a116dc6d7e96f6e490592ec3846093dc6864772758dd3a1f5bc"
+
+[[tasks]]
+name = "aider/polyglot_rust_fizzy"
+digest = "sha256:a36950c4db229e2c25482cea9614e98f14db04b86e5964e9f3b3b76dcb24ea08"
+
+[[tasks]]
+name = "aider/polyglot_rust_forth"
+digest = "sha256:a8a55fb27ae570473f165e8eb71c7c3094ea59272c48f30dde4c3f5ccaedcbcb"
+
+[[tasks]]
+name = "aider/polyglot_rust_grade-school"
+digest = "sha256:35023a9cabf46ade6a98a9235c42573cccb07940714163c4ecf6e341ce6b27ad"
+
+[[tasks]]
+name = "aider/polyglot_rust_grep"
+digest = "sha256:0e65328f82f7bb28a3c38e5d5d6328ba76ac8decc57be76ef916721676d88914"
+
+[[tasks]]
+name = "aider/polyglot_rust_luhn-from"
+digest = "sha256:b6645ad00493af2e4adc4b7f3f701ba3f5ebb3ce5e594dfd117d14a8c3f209ad"
+
+[[tasks]]
+name = "aider/polyglot_rust_nucleotide-codons"
+digest = "sha256:4dce57b4a97f100690727df5f6a2a094dc504112ce1efbc9b4b744f08b527c21"
+
+[[tasks]]
+name = "aider/polyglot_rust_ocr-numbers"
+digest = "sha256:577569e0c2d674907ad9828216599842d67afd0f0555ab3279069208eb80cf80"
+
+[[tasks]]
+name = "aider/polyglot_rust_parallel-letter-frequency"
+digest = "sha256:04611f65f1f9e2597a4e5913b53b03d8e22c7fbd935f2b9dcc96333a51b63e1d"
+
+[[tasks]]
+name = "aider/polyglot_rust_pig-latin"
+digest = "sha256:18bd262d625e3a7afd99e7ce3e8951624a4b56f8016f50f8458468614bae6fe3"
+
+[[tasks]]
+name = "aider/polyglot_rust_poker"
+digest = "sha256:fecf4d62ed03dfd242d51933735d7fc74658ecb9019a2b4e2fd036aee646902a"
+
+[[tasks]]
+name = "aider/polyglot_rust_react"
+digest = "sha256:7918d0ee28bab5fb9b90f36d4ab57be7c361a1fe16dad8899cd99f10507e3afd"
+
+[[tasks]]
+name = "aider/polyglot_rust_robot-name"
+digest = "sha256:28e70a5f69ccf663eb4ae6167ca57dec8a60b115e876b4b0b4a5d838e10aaece"
+
+[[tasks]]
+name = "aider/polyglot_rust_scale-generator"
+digest = "sha256:4dffedca49e95e20177ec57fe981baed38af304ed19749bfaa159f3e9ad988fb"
+
+[[tasks]]
+name = "aider/polyglot_rust_simple-cipher"
+digest = "sha256:5f7d5ac7e47263776f4bda611d84f2e27c03f5796e05e31b2c8bc70515ed02fb"
+
+[[tasks]]
+name = "aider/polyglot_rust_two-bucket"
+digest = "sha256:892524ddca582e43945c7741916fa32ca125c00bf88f6b24c4e12737a7639e8e"
+
+[[tasks]]
+name = "aider/polyglot_rust_word-count"
+digest = "sha256:d1db3d21c88fd2e0066f3bb01b780b8052e8e991c7f93bde0ad2cacd2c519291"
+
+[[tasks]]
+name = "aider/polyglot_rust_xorcism"
+digest = "sha256:492a9d36cd16976ef128792e5cd04f360c6cad0c5da5d6e4f6034adeab22f9c7"
+
