@@ -6,10 +6,14 @@ from typing import Any
 
 import yaml
 
-_EVAL_FIELDS = {"id", "dataset", "tasks", "attempts", "timeoutMinutes", "candidates"}
+_REQUIRED_EVAL_FIELDS = {"id", "dataset", "tasks", "attempts", "timeoutMinutes", "candidates"}
+_OPTIONAL_EVAL_FIELDS = {"datasetTrust", "concurrency"}
 _CANDIDATE_FIELDS = {"id", "agent", "model", "provider"}
 _FLOATING_DATASET_REFS = {"latest", "main", "head"}
 _SAFE_ID_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+PER_TASK_CALIBRATED = "per-task-calibrated"
+UPSTREAM_VERIFIED = "upstream-verified"
+_DATASET_TRUST_MODES = {PER_TASK_CALIBRATED, UPSTREAM_VERIFIED}
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,8 @@ class EvaluationConfig:
     attempts: int
     timeout_minutes: int
     candidates: tuple[Candidate, ...]
+    dataset_trust: str = PER_TASK_CALIBRATED
+    concurrency: int = 1
 
 
 def _mapping(value: Any, label: str) -> dict[str, Any]:
@@ -60,8 +66,8 @@ def load_config(path: Path) -> EvaluationConfig:
     with path.open(encoding="utf-8") as stream:
         raw = _mapping(yaml.safe_load(stream), "evaluation config")
 
-    unknown = set(raw) - _EVAL_FIELDS
-    missing = _EVAL_FIELDS - set(raw)
+    unknown = set(raw) - _REQUIRED_EVAL_FIELDS - _OPTIONAL_EVAL_FIELDS
+    missing = _REQUIRED_EVAL_FIELDS - set(raw)
     if unknown:
         raise ValueError(f"unknown evaluation fields: {', '.join(sorted(unknown))}")
     if missing:
@@ -73,6 +79,10 @@ def load_config(path: Path) -> EvaluationConfig:
     version = dataset.rsplit("@", 1)[1].lower()
     if not version or version in _FLOATING_DATASET_REFS:
         raise ValueError("dataset must not use a floating version")
+
+    dataset_trust = _required_string(raw.get("datasetTrust", PER_TASK_CALIBRATED), "datasetTrust")
+    if dataset_trust not in _DATASET_TRUST_MODES:
+        raise ValueError("datasetTrust must be 'per-task-calibrated' or 'upstream-verified'")
 
     task_values = raw["tasks"]
     if not isinstance(task_values, list) or not task_values:
@@ -111,10 +121,18 @@ def load_config(path: Path) -> EvaluationConfig:
 
     attempts = raw["attempts"]
     timeout = raw["timeoutMinutes"]
+    concurrency = raw.get("concurrency", 1)
     if attempts != 1 or isinstance(attempts, bool):
         raise ValueError("MVP supports exactly one attempt per candidate/task")
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout < 1:
         raise ValueError("timeoutMinutes must be a positive integer")
+    if (
+        not isinstance(concurrency, int)
+        or isinstance(concurrency, bool)
+        or concurrency < 1
+        or concurrency > 16
+    ):
+        raise ValueError("concurrency must be an integer between 1 and 16")
 
     return EvaluationConfig(
         id=_safe_id(raw["id"], "id"),
@@ -123,4 +141,6 @@ def load_config(path: Path) -> EvaluationConfig:
         attempts=attempts,
         timeout_minutes=timeout,
         candidates=tuple(candidates),
+        dataset_trust=dataset_trust,
+        concurrency=concurrency,
     )

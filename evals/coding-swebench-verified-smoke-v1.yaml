@@ -1,0 +1,11 @@
+id: coding-swebench-verified-smoke-v1
+dataset: swe-bench/swe-bench-verified@sha256:b934b0cc3dc800fe945eaf9f1623329db97ee3133c706d20644524c7759fb341
+datasetTrust: upstream-verified
+tasks:
+  - swe-bench/psf__requests-1142
+attempts: 1
+timeoutMinutes: 20
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: deepseek-responses-flash

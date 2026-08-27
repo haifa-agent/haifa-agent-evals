@@ -65,6 +65,27 @@ def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:
     assert not any(path.name == "result.json" for path in tmp_path.rglob("result.json"))
 
 
+def test_builds_harbor_job_with_explicit_concurrency(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="concurrent-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a", "task-b"),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "provider/model"),),
+        concurrency=2,
+    )
+
+    assert build_job_config(config, tmp_path)["n_concurrent_trials"] == 2
+
+    work_dir = tmp_path / "run-concurrent"
+    run(config, work_dir, plan_only=True)
+    manifest = json.loads(
+        (tmp_path / "run-concurrent-run-manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["concurrency"] == 2
+
+
 def test_builds_bailian_haifa_agent_with_separate_config(tmp_path: Path) -> None:
     config = EvaluationConfig(
         id="bailian-smoke",
@@ -90,9 +111,7 @@ def test_builds_bailian_haifa_agent_with_separate_config(tmp_path: Path) -> None
         "HAIFA_BAILIAN_ENDPOINT": "${HAIFA_BAILIAN_ENDPOINT}",
         "HAIFA_BAILIAN_MODEL_ID": "qwen3.7-max",
     }
-    assert str(agent["kwargs"]["config_path"]).endswith(
-        "haifa-eval-bailian-responses.yaml"
-    )
+    assert str(agent["kwargs"]["config_path"]).endswith("haifa-eval-bailian-responses.yaml")
 
 
 def test_uses_complete_local_task_cache(tmp_path: Path, monkeypatch) -> None:
@@ -281,6 +300,107 @@ def test_checked_in_aider_route_survives_harbor_provider_split(tmp_path: Path) -
     assert aider["env"]["AIDER_DISABLE_PLAYWRIGHT"] == "true"
 
 
+def test_cliproxyapi_gemini_route_uses_loopback_dialect_and_relay(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="gemini-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent",
+                "gemini-3-flash",
+                "cliproxyapi-antigravity",
+            ),
+        ),
+    )
+
+    job_config = build_job_config(config, tmp_path)
+
+    agent = job_config["agents"][0]
+    assert agent["env"] == {
+        "HAIFA_CLIPROXYAPI_API_KEY": "${HAIFA_CLIPROXYAPI_API_KEY}",
+        "HAIFA_CLIPROXYAPI_ENDPOINT": "http://127.0.0.1:8317/v1beta",
+        "HAIFA_CLIPROXYAPI_MODEL": "gemini-3-flash",
+        "HAIFA_ALLOW_INSECURE_LOOPBACK_MODEL": "true",
+        "HAIFA_MODEL_ID": "cliproxyapi-gemini",
+    }
+    assert str(agent["kwargs"]["config_path"]).endswith("haifa-eval-cliproxyapi-gemini.yaml")
+    assert agent["kwargs"]["loopback_relay_host"] == "host.containers.internal"
+    assert agent["kwargs"]["loopback_relay_port"] == 28317
+
+
+def test_openai_codex_route_uses_terra_oauth_and_container_proxy(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="codex-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent",
+                "gpt-5.6-terra",
+                "openai-codex",
+            ),
+        ),
+    )
+
+    agent = build_job_config(config, tmp_path)["agents"][0]
+
+    assert agent["env"]["HAIFA_MODEL_ID"] == "gpt-5.6-terra"
+    assert "host.containers.internal" in agent["env"]["JAVA_TOOL_OPTIONS"]
+    assert str(agent["kwargs"]["config_path"]).endswith("haifa-eval-openai-codex.yaml")
+    assert agent["kwargs"]["codex_auth"] is True
+
+
+def test_openai_codex_route_supports_sol(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="codex-sol-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent",
+                "gpt-5.6-sol",
+                "openai-codex",
+            ),
+        ),
+    )
+
+    agent = build_job_config(config, tmp_path)["agents"][0]
+
+    assert agent["env"]["HAIFA_MODEL_ID"] == "gpt-5.6-sol"
+    assert agent["kwargs"]["codex_auth"] is True
+
+
+def test_openai_codex_route_rejects_unknown_model(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="codex-unknown-smoke",
+        dataset="org/data@v1",
+        tasks=("task-a",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(
+            Candidate(
+                "haifa",
+                "haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent",
+                "gpt-unknown",
+                "openai-codex",
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="unsupported Codex evaluation model"):
+        build_job_config(config, tmp_path)
+
+
 def test_run_refuses_to_reuse_a_run_directory(tmp_path: Path) -> None:
     config = EvaluationConfig(
         id="smoke",
@@ -344,3 +464,96 @@ def test_failed_run_updates_manifest_terminal_status(tmp_path: Path) -> None:
     manifest = json.loads((tmp_path / "run-1-run-manifest.json").read_text(encoding="utf-8"))
     assert manifest["runStatus"] == "HARBOR_FAILED"
     assert manifest["finishedAt"]
+
+
+def test_registry_run_manifest_records_admitted_task_digests(tmp_path: Path) -> None:
+    task = "swe-bench/psf__requests-1142"
+    task_digest = "sha256:" + "b" * 64
+    config = EvaluationConfig(
+        id="swebench-smoke",
+        dataset=f"swe-bench/swe-bench-verified@sha256:{'a' * 64}",
+        tasks=(task,),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "deepseek/model"),),
+        dataset_trust="upstream-verified",
+    )
+    admission = tmp_path / "admission.json"
+    admission.write_text(
+        json.dumps(
+            {
+                "tasks": [
+                    {
+                        "task_id": task,
+                        "task_digest": task_digest,
+                        "status": "ADMITTED",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run(
+        config,
+        tmp_path / "run-1",
+        plan_only=True,
+        admission_path=admission,
+    )
+
+    manifest = json.loads((tmp_path / "run-1-run-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["datasetSource"] == "registry"
+    assert manifest["taskDigests"] == {task: task_digest}
+
+
+def test_frozen_environment_run_manifest_records_lock(tmp_path: Path) -> None:
+    task = "swe-bench/psf__requests-1142"
+    task_digest = "sha256:" + "b" * 64
+    frozen_digest = "sha256:" + "c" * 64
+    config = EvaluationConfig(
+        id="swebench-smoke",
+        dataset=f"swe-bench/swe-bench-verified@sha256:{'a' * 64}",
+        tasks=(task,),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "deepseek/model"),),
+        dataset_trust="upstream-verified",
+    )
+    tasks_path = tmp_path / "baseline" / "tasks"
+    (tasks_path / "psf__requests-1142").mkdir(parents=True)
+    lock = tasks_path.parent / "task-environment-lock.json"
+    lock.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 2,
+                "frozenTaskDigests": {task: frozen_digest},
+                "registryPrefix": "asia-east1-docker.pkg.dev/project/repository",
+                "builderContract": "swebench-registry-cache-v1",
+                "images": {task: {"reference": "registry/task@sha256:digest"}},
+                "cacheKeys": {task: "sha256:cache"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    admission = tmp_path / "admission.json"
+    admission.write_text(
+        json.dumps(
+            {"tasks": [{"task_id": task, "task_digest": task_digest, "status": "ADMITTED"}]}
+        ),
+        encoding="utf-8",
+    )
+
+    run(
+        config,
+        tmp_path / "run-1",
+        plan_only=True,
+        tasks_path=tasks_path,
+        admission_path=admission,
+    )
+
+    manifest = json.loads((tmp_path / "run-1-run-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["datasetSource"] == "local-frozen-environment"
+    assert manifest["taskDigests"] == {task: task_digest}
+    assert manifest["frozenTaskDigests"] == {task: frozen_digest}
+    assert manifest["taskEnvironmentLockSha256"]
+    assert manifest["taskEnvironment"]["images"][task]["reference"].endswith("@sha256:digest")

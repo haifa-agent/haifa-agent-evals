@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shlex
+import tempfile
 from pathlib import Path
 from typing import override
 
@@ -10,14 +11,19 @@ from harbor.agents.installed.base import BaseInstalledAgent, NonZeroAgentExitCod
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 
+from haifa_agent_evals.codex_auth import codex_auth_path, minimal_codex_auth
+
 _CONTAINER_ROOT = "/opt/haifa"
 _JAR_PATH = f"{_CONTAINER_ROOT}/haifa-agent.jar"
 _CONFIG_PATH = f"{_CONTAINER_ROOT}/haifa-eval.yaml"
+_LOOPBACK_RELAY_PATH = f"{_CONTAINER_ROOT}/loopback_tcp_relay.py"
 _DATABASE_PATH = "/tmp/haifa-runtime.db"
 _TRANSCRIPT_ROOT = "/tmp/haifa-transcripts"
 _ARCHIVED_DATABASE_PATH = "/logs/agent/haifa-runtime.db"
 _ARCHIVED_TRANSCRIPT_ROOT = "/logs/agent/haifa-transcripts"
 _JAVA_ARCHIVE_PATH = "/tmp/haifa-java.tar.gz"
+_CODEX_AUTH_UPLOAD_PATH = "/tmp/haifa-codex-auth.json"
+_CODEX_AUTH_PATH = "/root/.haifa-agent/auth.json"
 _JAVA_ARCHIVE_URL = (
     "https://github.com/adoptium/temurin21-binaries/releases/download/"
     "jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz"
@@ -42,6 +48,9 @@ class HaifaCodingAgent(BaseInstalledAgent):
         jar_path: str | Path | None = None,
         config_path: str | Path | None = None,
         java_archive_path: str | Path | None = None,
+        loopback_relay_host: str | None = None,
+        loopback_relay_port: int | None = None,
+        codex_auth: bool = False,
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -69,6 +78,17 @@ class HaifaCodingAgent(BaseInstalledAgent):
                 raise ValueError("Haifa eval Java archive digest does not match the pinned JDK")
         self.jar_digest = _sha256(self.jar_path)
         self.config_digest = _sha256(self.config_path)
+        self.loopback_relay_path = Path(__file__).with_name("loopback_tcp_relay.py")
+        self.loopback_relay_digest = _sha256(self.loopback_relay_path)
+        self.loopback_relay_host = loopback_relay_host
+        self.loopback_relay_port = loopback_relay_port
+        self.codex_auth_path = codex_auth_path() if codex_auth else None
+        if self.codex_auth_path is not None:
+            minimal_codex_auth(self.codex_auth_path)
+        if (loopback_relay_host is None) != (loopback_relay_port is None):
+            raise ValueError("loopback relay host and port must be configured together")
+        if loopback_relay_port is not None and not 1 <= loopback_relay_port <= 65535:
+            raise ValueError("loopback relay port must be between 1 and 65535")
 
     @staticmethod
     @override
@@ -83,8 +103,7 @@ class HaifaCodingAgent(BaseInstalledAgent):
     async def install(self, environment: BaseEnvironment) -> None:
         await self.exec_as_root(
             environment,
-            f"install -d -m 0755 {_CONTAINER_ROOT} && "
-            f"install -d -m 0777 {_TRANSCRIPT_ROOT}",
+            f"install -d -m 0755 {_CONTAINER_ROOT} && install -d -m 0777 {_TRANSCRIPT_ROOT}",
         )
         java_probe = await environment.exec(
             command=(
@@ -92,7 +111,7 @@ class HaifaCodingAgent(BaseInstalledAgent):
                 f"echo {_CONTAINER_ROOT}/java/bin/java || command -v java || true); "
                 'test -n "$JAVA" && '
                 '"$JAVA" -version 2>&1 | grep -q \'"21\' && '
-                '"$JAVA" --list-modules 2>/dev/null | grep -q \'^jdk.random@\''
+                "\"$JAVA\" --list-modules 2>/dev/null | grep -q '^jdk.random@'"
             ),
             user="root",
         )
@@ -120,16 +139,33 @@ class HaifaCodingAgent(BaseInstalledAgent):
             )
         await environment.upload_file(self.jar_path, _JAR_PATH)
         await environment.upload_file(self.config_path, _CONFIG_PATH)
+        await environment.upload_file(self.loopback_relay_path, _LOOPBACK_RELAY_PATH)
+        if self.codex_auth_path is not None:
+            payload = minimal_codex_auth(self.codex_auth_path)
+            with tempfile.TemporaryDirectory(prefix="haifa-eval-codex-auth-") as directory:
+                temporary_auth = Path(directory) / "auth.json"
+                temporary_auth.write_bytes(payload)
+                temporary_auth.chmod(0o600)
+                await environment.upload_file(temporary_auth, _CODEX_AUTH_UPLOAD_PATH)
+            await self.exec_as_root(
+                environment,
+                command=(
+                    "install -d -m 0700 /root/.haifa-agent && "
+                    f"install -m 0600 {_CODEX_AUTH_UPLOAD_PATH} {_CODEX_AUTH_PATH} && "
+                    f"rm {_CODEX_AUTH_UPLOAD_PATH}"
+                ),
+            )
         await self.exec_as_root(
             environment,
             command=(
-                f"chmod 0444 {_JAR_PATH} {_CONFIG_PATH} && "
+                f"chmod 0444 {_JAR_PATH} {_CONFIG_PATH} {_LOOPBACK_RELAY_PATH} && "
                 f"echo '{self.jar_digest}  {_JAR_PATH}' | sha256sum -c - && "
                 f"echo '{self.config_digest}  {_CONFIG_PATH}' | sha256sum -c - && "
+                f"echo '{self.loopback_relay_digest}  {_LOOPBACK_RELAY_PATH}' | sha256sum -c - && "
                 f"JAVA=$([ -x {_CONTAINER_ROOT}/java/bin/java ] && "
                 f"echo {_CONTAINER_ROOT}/java/bin/java || command -v java) && "
                 '"$JAVA" -version 2>&1 | grep -q \'"21\' && '
-                '"$JAVA" --list-modules | grep -q \'^jdk.random@\' && '
+                "\"$JAVA\" --list-modules | grep -q '^jdk.random@' && "
                 f'"$JAVA" -jar {_JAR_PATH} --help >/dev/null'
             ),
         )
@@ -141,7 +177,20 @@ class HaifaCodingAgent(BaseInstalledAgent):
         environment: BaseEnvironment,
         context: AgentContext,
     ) -> None:
-        command = (
+        relay_prefix = ""
+        if self.loopback_relay_host is not None and self.loopback_relay_port is not None:
+            relay_prefix = (
+                "PYTHON=$(command -v python3 || find /root/.local/share/uv/python "
+                "-path '*/bin/python3.12' -type f | head -n 1); "
+                'test -n "$PYTHON"; '
+                f'"$PYTHON" {_LOOPBACK_RELAY_PATH} '
+                "--listen-host 127.0.0.1 --listen-port 8317 "
+                f"--target-host {shlex.quote(self.loopback_relay_host)} "
+                f"--target-port {self.loopback_relay_port} & "
+                "RELAY_PID=$!; trap 'kill $RELAY_PID 2>/dev/null || true' EXIT; "
+                "sleep 1; kill -0 $RELAY_PID; "
+            )
+        command = relay_prefix + (
             f"JAVA=$([ -x {_CONTAINER_ROOT}/java/bin/java ] && "
             f"echo {_CONTAINER_ROOT}/java/bin/java || command -v java); "
             'WORKSPACE=$(pwd -P); "$JAVA" '

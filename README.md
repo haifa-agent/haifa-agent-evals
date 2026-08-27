@@ -43,6 +43,8 @@ uv run evals admit --config evals/coding-smoke-v1.yaml \
   --oracle-job-dir work/runs/calibration/oracle \
   --nop-job-dir work/runs/calibration/nop \
   --output work/gates/admissions/coding-smoke-v1.json
+uv run evals admit --config evals/coding-swebench-verified-smoke-v1.yaml \
+  --output work/gates/admissions/coding-swebench-verified-smoke-v1.json
 uv run evals doctor --config evals/coding-smoke-v1.yaml \
   --admission work/gates/admissions/coding-smoke-v1.json
 uv run evals run --config evals/coding-smoke-v1.yaml
@@ -56,7 +58,8 @@ uv run evals finalize --config evals/coding-smoke-v1.yaml \
 uv run evals image seed-aider --container <stopped-aider-trial-container-id>
 uv run evals image build --java-archive /path/to/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz
 uv run evals image check
-uv run evals image prepare-tasks --config evals/coding-smoke-v1.yaml --tasks-path work/tasks/derived
+uv run evals image prepare-tasks --config evals/coding-smoke-v1.yaml --tasks-path work/tasks/derived \
+  --minimum-free-gb 50 --build-concurrency 3
 uv run evals infra proxy start --source-port 2081
 uv run evals infra check --output work/gates/infrastructure/harbor-compose-network.json
 uv run pytest
@@ -66,15 +69,47 @@ uv run pytest
 和 NOP 可信 FAIL。准入 JSON 同时保留当前无法自动取得的 Verifier 测试数量，以及题面契约、测试全集和
 离线依赖三项人工复核重点；它不修改 Harbor Reward，也不替代 Harbor Verifier。
 
+配置显式声明 `datasetTrust: upstream-verified` 时，`admit` 改为从 Harbor Package Registry 解析精确
+Dataset 与所选 Task digest，并且只接受仓库内受信策略目录中列出的上游评测。当前目录仅包含
+`swe-bench/swe-bench-verified`；这种准入依赖上游 Benchmark 身份、Harbor Adapter/Parity 证据和精确
+Registry digest，不伪造本地 Oracle/NOP 校准。该模式仍只把 Harbor Verifier 作为正确性事实源，小规模
+Smoke 结果不得解释为 SWE-bench 分数估计。
+
 `results.csv` 的 `status` 始终是 Harbor 官方 PASS/FAIL/ERROR；`trial_validity`、
 `agent_clean_exit`、`failure_stage` 等字段是正交诊断维度，只解释运行是否有效及失败发生在哪一层，
 不得反向改写正式成绩。
+
+评测配置可通过可选的 `concurrency` 字段设置 Harbor Trial 并发度；默认值仍为 `1`，允许范围为
+`1..16`。提高并发前必须确认 Provider 配额、容器内存、磁盘和代理链路均有余量，并在 Run Manifest
+中保留实际并发值。大规模付费评测应从 `2` 开始验证，不能仅为缩短耗时直接提高到机器上限。
 
 `doctor` 只做只读检查：准入证据、Dataset/Task digest、Harbor 版本、容器连接、JAR smoke、
 Credential 变量存在性、磁盘和 Python 版本。配置 Harbor Compose overlay 时，它还要求一份未过期且
 与 overlay、代理端点和容器后端完全匹配的真实 Compose 网络预检证据。它不会打印 Credential 值，
 也不会下载镜像或调用模型。
 非 `--plan-only` 的 `run` 会自动执行同一门禁；任一必需项失败时返回 2，不启动 Harbor。
+
+## 固定 30 题一键就绪检查
+
+当前 SWE-bench Verified 30 题可以在不调用付费模型的前提下，一次检查 Task 集合、Admission、
+冻结 Task/OCI digest、本机镜像、固定 JDK、Haifa JAR、Codex OAuth、Podman、代理链、真实 Harbor
+Compose 网络、Harbor/Python 版本和 50 GiB 磁盘余量：
+
+```powershell
+.\scripts\check-swebench-ready.ps1 --refresh-network
+```
+
+Linux/macOS 使用同参数的 `./scripts/check-swebench-ready.sh`。命令输出 `READY` 且退出码为 `0` 才能
+开始正式评测；`BLOCKED` 返回 `2`。`--refresh-network` 会启动一个 Oracle 基础设施任务，生成 30 分钟
+有效的真实 Compose 网络证据，但不会调用模型。若本地代理三段链路尚未启动，可同时传
+`--start-proxy`；默认只检查现有 relay，不静默创建后台进程。报告写入
+`work/gates/readiness/<eval-id>.json`，不记录凭据内容。
+
+冻结 Task 镜像不包含模型名、Provider 凭据或模型权重。只更换模型时无需重建 30 个 OCI 镜像；
+但 Admission 和 `task-environment-lock.json` 当前绑定 `evalId`。为新模型使用新的 eval ID 时，应为
+新配置重新生成匹配的 Admission 与 baseline 元数据，可以复用相同 OCI digest，不需要重新构建镜像层。
+只有题目/Verifier、系统依赖、基础镜像、CPU 架构，或 Agent 在容器内所需运行时发生变化，才需要
+重新制作相应 Task 镜像。
 
 默认运行目录是 `work/runs/evaluations/<eval-id>/<UTC-time>-<random>/`。每次运行同时生成唯一的
 `*-run-manifest.json`，记录计划矩阵和配置/Dataset/Task/JAR/准入/preflight 摘要；已存在的 Run ID
@@ -130,6 +165,75 @@ Haifa adapter 会先探测镜像中的 Java 21，再决定是否上传 JDK；固
 
 `image prepare-tasks` 完成上述转换：它先验证原始冻结数据集，并按 `/app` 文件内容匹配本机已经成功构建的 Harbor 题目镜像；随后从这些镜像复用语言工具链与 workspace，再叠加固定 Agent 基础设施，全程不重新下载语言依赖。生成镜像使用 RepoDigest 写入新的 `task.toml`，最后生成新的任务摘要、数据集摘要和 eval 配置。输出默认位于
 `work/cache/images/task-environments/coding-smoke-v1-agent-infra-v4/`。
+
+大批量准备可通过 `--minimum-free-gb` 设置目标盘硬门禁。工具在开始下一道题前检查输出盘可用空间；
+达到门禁后不再构建新镜像，并用已经完整冻结的题目生成可用的部分 Dataset Manifest 与 eval 配置。
+`images.json` 记录请求/完成题数、门禁是否触发及结束时剩余字节，不能把未完成 staging 当成已冻结题目。
+`--build-concurrency` 独立控制本地镜像构建并发，默认仍为 1，允许 1 到 16；它不改变正式模型 Trial
+的 `concurrency`。磁盘门禁在每批提交前检查，达到门禁后不会提交下一批，已在运行的构建会完成。
+
+SWE-bench Verified 使用独立的环境冻结入口。它只接受与 upstream admission 中 Task digest
+完全一致的 Registry Task 包，把一次成功构建的 `/testbed` 镜像重标记到稳定本地仓库名，并把
+RepoDigest 写入派生 `task.toml`。输出的 `task-environment-lock.json` 同时固定来源 Task digest、
+派生 Task digest、镜像 ID、OCI digest、大小与平台；`doctor` 在付费运行前重新计算文件摘要并检查
+本机镜像身份。因此后续 Trial 直接启动预构建镜像，不再执行 Task Dockerfile 中的联网安装：
+
+```powershell
+$source = "work/cache/downloads/swebench-verified-smoke-20260823"
+$admission = "work/gates/admissions/coding-swebench-verified-smoke-v1.json"
+uv run evals image freeze-swebench `
+  --config evals/coding-swebench-verified-smoke-v1.yaml `
+  --tasks-path $source `
+  --admission $admission `
+  --container-cli podman
+
+$baseline = "work/cache/images/task-environments/coding-swebench-verified-smoke-v1-baseline-v1/tasks"
+uv run evals doctor `
+  --config evals/coding-swebench-verified-smoke-v1.yaml `
+  --tasks-path $baseline `
+  --admission $admission `
+  --container-cli podman
+uv run evals run `
+  --config evals/coding-swebench-verified-smoke-v1.yaml `
+  --tasks-path $baseline `
+  --admission $admission `
+  --container-cli podman
+```
+
+自动发现仅在本机恰好有一个匹配 Task slug 且工作目录为 `/testbed` 的镜像时成立；多镜像场景用
+可重复的 `--source-image task=image` 显式消歧。本地冻结完成后，使用 `image publish-swebench-cache`
+将镜像推送到 OCI Registry，并生成 schema 2 的可迁移 baseline；正式配置只引用 Registry
+`@sha256:`，不能使用可漂移 tag：
+
+```powershell
+uv run evals image publish-swebench-cache `
+  --config evals/coding-swebench-verified-smoke-v1.yaml `
+  --tasks-path $baseline `
+  --admission $admission `
+  --registry-prefix asia-east1-docker.pkg.dev/PROJECT/haifa-eval-images `
+  --output work/cache/images/task-environments/coding-swebench-verified-smoke-registry-v1 `
+  --container-cli podman
+```
+
+新机器可以先用 `image check-swebench-cache` 做只读远端存在性检查，再用
+`image restore-swebench-cache` 拉取缺失镜像。恢复命令逐题比较 lock 中的 reference、image ID、OCI
+digest、大小、OS 和架构，并重新执行完整环境 baseline 校验；任一镜像缺失或身份不匹配都会在模型
+调用前失败。正式 Runner 只应有 Registry Reader 权限，不能在 cache miss 时现场构建或推送。
+
+`evals/coding-swebench-verified-representative-5-v1.yaml` 是第一批固定 DeepSeek Pipeline Smoke：
+
+- Requests、Flask：两道 `<15 min fix`，覆盖轻量 HTTP/Web 库；
+- Pytest、Django：两道 `15 min - 1 hour`，覆盖测试框架和大型 Web 框架；
+- SymPy：一道 `1-4 hours`，覆盖符号计算与较长模型/工具循环。
+
+五题来自五个不同仓库，只用于环境、Agent、Provider、Verifier 和证据流水线冒烟，不是从 Verified
+500 估计总体分数的统计样本。首轮固定运行得到 3/5 PASS，五个环境初始化均为 4.755～5.304 秒；
+Django 是 Verifier FAIL 加 Agent 非零退出，SymPy 是干净完成但 Verifier FAIL，两者必须分开解释。
+
+`evals/coding-swebench-verified-representative-5-qwen37-v1.yaml` 在完全相同的五题和冻结镜像上使用
+百炼 `qwen3.7-max`。首轮运行总耗时 38 分 52 秒，Verifier 为 0/5 PASS；Django、Pytest 是干净完成，
+Flask、Requests、SymPy 为 `NonZeroAgentExitCodeError`。5/5 Trial 仍全部有效且 SQLite/Trace/Transcript
+证据完整，因此该结果证明百炼评测链路可用，但不能解释为模型正确性通过或 Verified 总体分数。
 
 运行生成环境时显式指定两项本地证据：
 

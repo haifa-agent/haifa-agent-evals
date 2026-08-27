@@ -1,0 +1,29 @@
+[dataset]
+name = "haifa/coding-polyglot-6-gemini-comparison-v1"
+description = "Six-language smoke subset matching the Gemini CLIProxyAPI evaluation"
+authors = []
+keywords = ["coding-agent", "polyglot", "smoke"]
+
+[[tasks]]
+name = "aider/polyglot_cpp_perfect-numbers"
+digest = "sha256:3b2052ff2189b8f895aa4f65d2e6d98307ead73b0e1c2089a3a73e1be78206f0"
+
+[[tasks]]
+name = "aider/polyglot_go_say"
+digest = "sha256:8867d6179e3cf0f52c38a8b65c1066db2815667e4f18702e610a09e9ffa75c55"
+
+[[tasks]]
+name = "aider/polyglot_java_simple-linked-list"
+digest = "sha256:740afbaaae241754b26bcb0217ac19f6dfdc3be43a6c276d9c386f37aa676bf2"
+
+[[tasks]]
+name = "aider/polyglot_javascript_parallel-letter-frequency"
+digest = "sha256:e08ae142c083d593b23a1778f8b2196adb8bf0df588b6c9c072861cb9ce3a46c"
+
+[[tasks]]
+name = "aider/polyglot_python_book-store"
+digest = "sha256:eecc6f0342d7e8622a6c9ddda5cff3071628c04468c2481543525ec1c9da8fa4"
+
+[[tasks]]
+name = "aider/polyglot_rust_macros"
+digest = "sha256:5c146fdff8eb5134490d50ce9eee07fa1287d5076679c2e3e3335609bd62e2b8"

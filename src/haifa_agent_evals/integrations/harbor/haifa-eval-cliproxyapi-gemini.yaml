@@ -1,0 +1,72 @@
+models:
+  default: cliproxyapi-gemini
+  providers:
+    - id: cliproxyapi-antigravity
+      displayName: Local CLIProxyAPI Antigravity Dialect
+      endpoint: ${HAIFA_CLIPROXYAPI_ENDPOINT}
+      credentialRef: env://HAIFA_CLIPROXYAPI_API_KEY
+      nativeStreaming: true
+      apiBindings:
+        - style: google-gemini-generate-content
+          dialect: cliproxyapi-antigravity
+      models:
+        - id: cliproxyapi-gemini
+          displayName: Gemini via Local CLIProxyAPI Antigravity Dialect
+          providerModelId: ${HAIFA_CLIPROXYAPI_MODEL}
+          style: google-gemini-generate-content
+          capabilities: [TEXT_CHAT, TOOL_CALLING, STRUCTURED_OUTPUT, REASONING]
+          contextWindow: 131072
+          maxOutputTokens: 8192
+
+tools:
+  enabled:
+    - file.list
+    - file.stat
+    - file.read
+    - file.create
+    - file.write
+    - file.patch
+    - file.delete
+    - file.move
+    - execution.run
+
+skills:
+  allowed: []
+
+approval:
+  mode: auto
+
+execution:
+  provider: host-guarded
+  network: allow
+  shell: auto
+  defaultTimeoutMillis: 120000
+  maxTimeoutMillis: 1200000
+  maxOutputLines: 2000
+  maxOutputBytes: 51200
+  maxProcesses: 32
+  inheritEnvironment:
+    - PATH
+    - JAVA_HOME
+    - HOME
+    - LANG
+    - LC_ALL
+    - TMPDIR
+    - TMP
+    - TEMP
+    - GOTMPDIR
+    - GOCACHE
+  extraPathPolicies: []
+
+runtime:
+  maxIterations: 50
+  maxToolCalls: 32
+  maxWallTimeMillis: 1200000
+
+persistence:
+  mode: SQLITE_WITH_JSONL
+  databasePath: /tmp/haifa-runtime.db
+  transcriptRoot: /tmp/haifa-transcripts
+  protection: NONE
+  busyTimeoutMillis: 5000
+  maximumPayloadBytes: 1048576

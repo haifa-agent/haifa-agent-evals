@@ -1,0 +1,15 @@
+id: coding-swebench-verified-representative-5-v1
+dataset: swe-bench/swe-bench-verified@sha256:b934b0cc3dc800fe945eaf9f1623329db97ee3133c706d20644524c7759fb341
+datasetTrust: upstream-verified
+tasks:
+  - swe-bench/psf__requests-1142
+  - swe-bench/pallets__flask-5014
+  - swe-bench/pytest-dev__pytest-8399
+  - swe-bench/django__django-16950
+  - swe-bench/sympy__sympy-17630
+attempts: 1
+timeoutMinutes: 20
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: deepseek-responses-flash

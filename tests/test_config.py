@@ -30,6 +30,37 @@ def test_loads_minimal_config(tmp_path: Path) -> None:
     assert config.id == "smoke"
     assert config.tasks == ("task-a", "task-b")
     assert config.candidates[0].provider is None
+    assert config.dataset_trust == "per-task-calibrated"
+    assert config.concurrency == 1
+
+
+def test_loads_explicit_concurrency(tmp_path: Path) -> None:
+    config = load_config(
+        _write(tmp_path, BASE.replace("attempts: 1", "attempts: 1\nconcurrency: 2"))
+    )
+
+    assert config.concurrency == 2
+
+
+@pytest.mark.parametrize("value", ["0", "17", "true", "two"])
+def test_rejects_invalid_concurrency(tmp_path: Path, value: str) -> None:
+    with pytest.raises(ValueError, match="concurrency"):
+        load_config(
+            _write(tmp_path, BASE.replace("attempts: 1", f"attempts: 1\nconcurrency: {value}"))
+        )
+
+
+def test_loads_upstream_verified_dataset_trust(tmp_path: Path) -> None:
+    config = load_config(
+        _write(tmp_path, BASE.replace("tasks:", "datasetTrust: upstream-verified\ntasks:"))
+    )
+
+    assert config.dataset_trust == "upstream-verified"
+
+
+def test_rejects_unknown_dataset_trust(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="datasetTrust"):
+        load_config(_write(tmp_path, BASE + "datasetTrust: unreviewed\n"))
 
 
 def test_loads_explicit_candidate_provider(tmp_path: Path) -> None:
@@ -89,9 +120,7 @@ def test_rejects_eval_id_that_can_escape_work_directory(tmp_path: Path) -> None:
 def test_checked_in_dataset_manifest_matches_evaluation_config() -> None:
     repository = Path(__file__).resolve().parents[1]
     config = load_config(repository / "evals" / "coding-smoke-v1.yaml")
-    manifest = DatasetManifest.from_toml_file(
-        repository / "evals" / "coding-smoke-v1.dataset.toml"
-    )
+    manifest = DatasetManifest.from_toml_file(repository / "evals" / "coding-smoke-v1.dataset.toml")
     dataset_name, dataset_ref = config.dataset.rsplit("@", 1)
 
     assert manifest.dataset.name == dataset_name
@@ -109,9 +138,7 @@ def test_bailian_qwen37_smoke_config_matches_single_task_manifest() -> None:
     assert config.tasks == ("haifa/coding-smoke-cpp-gigasecond",)
     assert config.candidates[0].model == "qwen3.7-max"
     assert config.candidates[0].resolved_provider() == "aliyun-bailian"
-    assert config.dataset == (
-        f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}"
-    )
+    assert config.dataset == (f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}")
     assert {task.name for task in manifest.tasks} == set(config.tasks)
 
 
@@ -133,38 +160,27 @@ def test_polyglot_30_config_is_balanced_and_haifa_only() -> None:
         "rust": 5,
     }
     assert [candidate.id for candidate in config.candidates] == ["haifa"]
-    assert config.dataset == (
-        f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}"
-    )
+    assert config.dataset == (f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}")
     assert {task.name for task in manifest.tasks} == set(config.tasks)
 
 
 def test_cpp_verifier_fixed_polyglot_30_config_matches_manifest() -> None:
     repository = Path(__file__).resolve().parents[1]
-    config = load_config(
-        repository / "evals" / "coding-polyglot-30-v1-cpp-verifier-fixed.yaml"
-    )
+    config = load_config(repository / "evals" / "coding-polyglot-30-v1-cpp-verifier-fixed.yaml")
     manifest = DatasetManifest.from_toml_file(
-        repository
-        / "evals"
-        / "coding-polyglot-30-v1-cpp-verifier-fixed.dataset.toml"
+        repository / "evals" / "coding-polyglot-30-v1-cpp-verifier-fixed.dataset.toml"
     )
 
     assert len(config.tasks) == 30
     assert [candidate.id for candidate in config.candidates] == ["haifa"]
-    assert config.dataset == (
-        f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}"
-    )
+    assert config.dataset == (f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}")
     assert {task.name for task in manifest.tasks} == set(config.tasks)
 
 
 def test_cpp_verifier_reward_fallback_patch_covers_selected_cpp_tasks() -> None:
     repository = Path(__file__).resolve().parents[1]
     patch = (
-        repository
-        / "evals"
-        / "patches"
-        / "aider-polyglot-selected-cpp-reward-fallback.patch"
+        repository / "evals" / "patches" / "aider-polyglot-selected-cpp-reward-fallback.patch"
     ).read_text(encoding="utf-8")
 
     assert patch.count("+trap write_default_reward EXIT") == 5
@@ -180,13 +196,9 @@ def test_cpp_verifier_reward_fallback_patch_covers_selected_cpp_tasks() -> None:
 
 def test_recovery_subset_contains_remaining_three_languages() -> None:
     repository = Path(__file__).resolve().parents[1]
-    config = load_config(
-        repository / "evals" / "coding-polyglot-15-java-python-rust-v1.yaml"
-    )
+    config = load_config(repository / "evals" / "coding-polyglot-15-java-python-rust-v1.yaml")
     manifest = DatasetManifest.from_toml_file(
-        repository
-        / "evals"
-        / "coding-polyglot-15-java-python-rust-v1.dataset.toml"
+        repository / "evals" / "coding-polyglot-15-java-python-rust-v1.dataset.toml"
     )
     languages = [task.split("_", 2)[1] for task in config.tasks]
 
@@ -196,7 +208,46 @@ def test_recovery_subset_contains_remaining_three_languages() -> None:
         "python": 5,
         "rust": 5,
     }
-    assert config.dataset == (
-        f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}"
-    )
+    assert config.dataset == (f"{manifest.dataset.name}@sha256:{manifest.compute_content_hash()}")
     assert {task.name for task in manifest.tasks} == set(config.tasks)
+
+
+def test_swebench_verified_smoke_is_one_pinned_upstream_task() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    config = load_config(repository / "evals" / "coding-swebench-verified-smoke-v1.yaml")
+
+    assert config.dataset == (
+        "swe-bench/swe-bench-verified@"
+        "sha256:b934b0cc3dc800fe945eaf9f1623329db97ee3133c706d20644524c7759fb341"
+    )
+    assert config.dataset_trust == "upstream-verified"
+    assert config.tasks == ("swe-bench/psf__requests-1142",)
+
+
+def test_swebench_verified_representative_smoke_is_five_pinned_upstream_tasks() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    config = load_config(repository / "evals" / "coding-swebench-verified-representative-5-v1.yaml")
+
+    assert config.dataset_trust == "upstream-verified"
+    assert config.dataset.startswith("swe-bench/swe-bench-verified@sha256:")
+    assert len(config.tasks) == 5
+    assert len({task.split("/", 1)[1].rsplit("-", 1)[0] for task in config.tasks}) == 5
+    assert config.candidates[0].model == "deepseek-responses-flash"
+    assert [candidate.id for candidate in config.candidates] == ["haifa"]
+
+
+def test_swebench_verified_qwen37_smoke_reuses_the_same_five_tasks() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    deepseek = load_config(
+        repository / "evals" / "coding-swebench-verified-representative-5-v1.yaml"
+    )
+    qwen = load_config(
+        repository / "evals" / "coding-swebench-verified-representative-5-qwen37-v1.yaml"
+    )
+
+    assert qwen.dataset_trust == "upstream-verified"
+    assert qwen.dataset == deepseek.dataset
+    assert qwen.tasks == deepseek.tasks
+    assert len(qwen.tasks) == len(set(qwen.tasks)) == 5
+    assert qwen.candidates[0].model == "qwen3.7-max"
+    assert qwen.candidates[0].resolved_provider() == "aliyun-bailian"

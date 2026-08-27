@@ -5,11 +5,12 @@ import json
 import os
 from pathlib import Path
 
-from haifa_agent_evals.admission import admit
+from haifa_agent_evals.admission import admit, admit_upstream_verified
 from haifa_agent_evals.collector import collect
-from haifa_agent_evals.config import load_config
+from haifa_agent_evals.config import UPSTREAM_VERIFIED, load_config
 from haifa_agent_evals.dataset import configured_tasks_path
 from haifa_agent_evals.doctor import doctor
+from haifa_agent_evals.environment_baseline import freeze_swebench_task_environments
 from haifa_agent_evals.finalizer import finalize
 from haifa_agent_evals.image_cache import (
     DEFAULT_IMAGE,
@@ -24,6 +25,11 @@ from haifa_agent_evals.infrastructure import (
     run_compose_network_preflight,
 )
 from haifa_agent_evals.proxy_relay import relay_status, start_relay, stop_relay
+from haifa_agent_evals.registry_cache import (
+    check_swebench_cache,
+    publish_swebench_cache,
+    restore_swebench_cache,
+)
 from haifa_agent_evals.reporter import report
 from haifa_agent_evals.runner import new_run_id, run
 
@@ -55,12 +61,12 @@ def _parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument("--infra-evidence", type=Path)
 
     admit_parser = commands.add_parser(
-        "admit", help="validate a pinned dataset with oracle and nop calibration evidence"
+        "admit", help="validate a pinned local or upstream-verified dataset"
     )
     admit_parser.add_argument("--config", type=Path, required=True)
-    admit_parser.add_argument("--tasks-path", type=Path, required=True)
-    admit_parser.add_argument("--oracle-job-dir", type=Path, required=True)
-    admit_parser.add_argument("--nop-job-dir", type=Path, required=True)
+    admit_parser.add_argument("--tasks-path", type=Path)
+    admit_parser.add_argument("--oracle-job-dir", type=Path)
+    admit_parser.add_argument("--nop-job-dir", type=Path)
     admit_parser.add_argument("--output", type=Path, required=True)
 
     collect_parser = commands.add_parser("collect", help="collect Harbor trials into CSV")
@@ -105,9 +111,42 @@ def _parser() -> argparse.ArgumentParser:
     image_prepare.add_argument("--output", type=Path)
     image_prepare.add_argument("--image", default=DEFAULT_IMAGE)
     image_prepare.add_argument("--container-cli")
+    image_prepare.add_argument("--minimum-free-gb", type=float, default=0.0)
+    image_prepare.add_argument("--build-concurrency", type=int, default=1)
+    image_freeze = image_commands.add_parser(
+        "freeze-swebench", help="freeze verified SWE-bench tasks onto digest-pinned images"
+    )
+    image_freeze.add_argument("--config", type=Path, required=True)
+    image_freeze.add_argument("--tasks-path", type=Path, required=True)
+    image_freeze.add_argument("--admission", type=Path, required=True)
+    image_freeze.add_argument("--output", type=Path)
+    image_freeze.add_argument("--source-image", action="append")
+    image_freeze.add_argument("--container-cli")
     image_check = image_commands.add_parser("check", help="inspect and smoke-test the image")
     image_check.add_argument("--image", default=DEFAULT_IMAGE)
     image_check.add_argument("--container-cli")
+    image_publish = image_commands.add_parser(
+        "publish-swebench-cache", help="push a frozen SWE-bench baseline to an OCI registry"
+    )
+    image_publish.add_argument("--config", type=Path, required=True)
+    image_publish.add_argument("--tasks-path", type=Path, required=True)
+    image_publish.add_argument("--admission", type=Path, required=True)
+    image_publish.add_argument("--registry-prefix", required=True)
+    image_publish.add_argument("--output", type=Path, required=True)
+    image_publish.add_argument("--container-cli")
+    image_cache_check = image_commands.add_parser(
+        "check-swebench-cache", help="verify that every locked registry digest is available"
+    )
+    image_cache_check.add_argument("--config", type=Path, required=True)
+    image_cache_check.add_argument("--tasks-path", type=Path, required=True)
+    image_cache_check.add_argument("--container-cli")
+    image_restore = image_commands.add_parser(
+        "restore-swebench-cache", help="pull and validate a frozen registry baseline"
+    )
+    image_restore.add_argument("--config", type=Path, required=True)
+    image_restore.add_argument("--tasks-path", type=Path, required=True)
+    image_restore.add_argument("--admission", type=Path, required=True)
+    image_restore.add_argument("--container-cli")
 
     infra_parser = commands.add_parser(
         "infra", help="manage and verify the evaluation network infrastructure"
@@ -145,12 +184,10 @@ def main(argv: list[str] | None = None) -> int:
         config = load_config(args.config)
         work_dir = args.work_dir or Path("work") / "runs" / "evaluations" / config.id / new_run_id()
         tasks_path = configured_tasks_path(config, args.tasks_path)
-        admission = None
+        admission = args.admission
         doctor_output = None
         if not args.plan_only:
-            admission = (
-                args.admission or Path("work") / "gates" / "admissions" / f"{config.id}.json"
-            )
+            admission = admission or Path("work") / "gates" / "admissions" / f"{config.id}.json"
             doctor_output = (
                 args.doctor_output or work_dir.parent / f"{work_dir.name}-preflight.json"
             )
@@ -166,13 +203,12 @@ def main(argv: list[str] | None = None) -> int:
             if preflight["status"] != "READY":
                 print(json.dumps(preflight, indent=2))
                 return 2
-        runner_tasks_path = tasks_path if not args.plan_only else args.tasks_path
         print(
             run(
                 config,
                 work_dir,
                 args.plan_only,
-                runner_tasks_path,
+                args.tasks_path,
                 args.jar,
                 admission,
                 doctor_output,
@@ -199,13 +235,25 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     elif args.command == "admit":
         config = load_config(args.config)
-        admitted = admit(
-            config,
-            args.tasks_path,
-            args.oracle_job_dir,
-            args.nop_job_dir,
-            args.output,
-        )
+        if config.dataset_trust == UPSTREAM_VERIFIED:
+            if args.tasks_path or args.oracle_job_dir or args.nop_job_dir:
+                raise ValueError(
+                    "upstream-verified admission does not accept local calibration paths"
+                )
+            admitted = admit_upstream_verified(config, args.output)
+        else:
+            if not args.tasks_path or not args.oracle_job_dir or not args.nop_job_dir:
+                raise ValueError(
+                    "per-task-calibrated admission requires --tasks-path, "
+                    "--oracle-job-dir and --nop-job-dir"
+                )
+            admitted = admit(
+                config,
+                args.tasks_path,
+                args.oracle_job_dir,
+                args.nop_job_dir,
+                args.output,
+            )
         print(json.dumps({"status": admitted["status"], "output": str(args.output)}))
     elif args.command == "collect":
         config = load_config(args.config) if args.config else None
@@ -243,7 +291,58 @@ def main(argv: list[str] | None = None) -> int:
                     args.tasks_path,
                     args.output,
                     args.image,
-                    args.container_cli,
+                    container_cli=args.container_cli,
+                    minimum_free_bytes=int(args.minimum_free_gb * 1024**3),
+                    build_concurrency=args.build_concurrency,
+                ),
+                indent=2,
+            )
+        )
+    elif args.command == "image" and args.image_command == "freeze-swebench":
+        print(
+            json.dumps(
+                freeze_swebench_task_environments(
+                    args.config,
+                    args.tasks_path,
+                    args.admission,
+                    args.output,
+                    container_cli=args.container_cli,
+                    source_images=args.source_image,
+                ),
+                indent=2,
+            )
+        )
+    elif args.command == "image" and args.image_command == "publish-swebench-cache":
+        print(
+            json.dumps(
+                publish_swebench_cache(
+                    args.config,
+                    args.tasks_path,
+                    args.admission,
+                    args.registry_prefix,
+                    args.output,
+                    container_cli=args.container_cli,
+                ),
+                indent=2,
+            )
+        )
+    elif args.command == "image" and args.image_command == "check-swebench-cache":
+        print(
+            json.dumps(
+                check_swebench_cache(
+                    args.config, args.tasks_path, container_cli=args.container_cli
+                ),
+                indent=2,
+            )
+        )
+    elif args.command == "image" and args.image_command == "restore-swebench-cache":
+        print(
+            json.dumps(
+                restore_swebench_cache(
+                    args.config,
+                    args.tasks_path,
+                    args.admission,
+                    container_cli=args.container_cli,
                 ),
                 indent=2,
             )

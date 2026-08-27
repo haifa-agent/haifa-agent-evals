@@ -128,6 +128,110 @@ def test_doctor_accepts_bailian_provider_without_exposing_endpoint(
     assert "workspace-123" not in rendered
 
 
+def test_doctor_accepts_cliproxyapi_antigravity_without_exposing_key(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base, tasks_path, admission_path = _fixture(tmp_path, monkeypatch)
+    config = EvaluationConfig(
+        id=base.id,
+        dataset=base.dataset,
+        tasks=base.tasks,
+        attempts=base.attempts,
+        timeout_minutes=base.timeout_minutes,
+        candidates=(
+            Candidate(
+                "haifa",
+                "package:Haifa",
+                "gemini-3-flash",
+                "cliproxyapi-antigravity",
+            ),
+        ),
+    )
+    jar = tmp_path / "agent.jar"
+    jar.write_bytes(b"fake jar")
+    output = tmp_path / "preflight.json"
+
+    result = doctor(
+        config,
+        tasks_path,
+        admission_path,
+        output,
+        jar_path=jar,
+        container_cli="podman",
+        environment={"HAIFA_CLIPROXYAPI_API_KEY": "local-secret"},
+        command_probe=lambda command: True,
+        which=lambda command: command,
+        free_bytes=MINIMUM_FREE_BYTES,
+        harbor_version="0.20.0",
+    )
+
+    assert result["status"] == "READY"
+    assert "local-secret" not in output.read_text(encoding="utf-8")
+
+
+def test_doctor_accepts_openai_codex_minimal_oauth_without_exposing_tokens(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base, tasks_path, admission_path = _fixture(tmp_path, monkeypatch)
+    config = EvaluationConfig(
+        id=base.id,
+        dataset=base.dataset,
+        tasks=base.tasks,
+        attempts=base.attempts,
+        timeout_minutes=base.timeout_minutes,
+        candidates=(
+            Candidate("haifa", "package:Haifa", "gpt-5.6-terra", "openai-codex"),
+        ),
+    )
+    auth = tmp_path / "auth.json"
+    auth.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "credentials": {
+                    "model-auth://openai-codex/default": {
+                        "kind": "EXTERNAL",
+                        "method_id": "openai-codex",
+                        "client_registration_ref": "local-compat",
+                        "access_token": "access-secret",
+                        "refresh_token": "refresh-secret",
+                        "expires_at_epoch_millis": 2_000_000_000_000,
+                        "issued_at_epoch_millis": 1_900_000_000_000,
+                        "account_id": "account-secret",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    jar = tmp_path / "agent.jar"
+    jar.write_bytes(b"fake jar")
+    output = tmp_path / "preflight.json"
+
+    result = doctor(
+        config,
+        tasks_path,
+        admission_path,
+        output,
+        jar_path=jar,
+        container_cli="podman",
+        environment={"HAIFA_EVAL_CODEX_AUTH_PATH": str(auth)},
+        command_probe=lambda command: True,
+        which=lambda command: command,
+        free_bytes=MINIMUM_FREE_BYTES,
+        harbor_version="0.20.0",
+    )
+
+    assert result["status"] == "READY"
+    rendered = output.read_text(encoding="utf-8")
+    assert "access-secret" not in rendered
+    assert "refresh-secret" not in rendered
+    assert any(
+        check["name"] == "codex-auth" and check["status"] == "PASS"
+        for check in result["checks"]
+    )
+
+
 def test_doctor_blocks_missing_admission_credential_and_container(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -208,8 +312,62 @@ def test_doctor_blocks_proxy_run_without_harbor_compose_evidence(
     )
 
     assert result["status"] == "BLOCKED"
-    network = next(
-        check for check in result["checks"] if check["name"] == "harbor-compose-network"
-    )
+    network = next(check for check in result["checks"] if check["name"] == "harbor-compose-network")
     assert network["status"] == "FAIL"
     assert "evidence is required" in network["detail"]
+
+
+def test_doctor_accepts_upstream_verified_registry_admission(tmp_path: Path) -> None:
+    dataset_digest = "sha256:" + "a" * 64
+    task_digest = "sha256:" + "b" * 64
+    config = EvaluationConfig(
+        id="swebench-smoke",
+        dataset=f"swe-bench/swe-bench-verified@{dataset_digest}",
+        tasks=("swe-bench/psf__requests-1142",),
+        attempts=1,
+        timeout_minutes=20,
+        candidates=(Candidate("haifa", "package:Haifa", "deepseek/model"),),
+        dataset_trust="upstream-verified",
+    )
+    admission_path = tmp_path / "admission.json"
+    admission_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 2,
+                "evalId": config.id,
+                "dataset": config.dataset,
+                "manifestDigest": dataset_digest,
+                "status": "ADMITTED",
+                "trustMode": "UPSTREAM_VERIFIED",
+                "policyId": "swe-bench-verified-harbor-v1",
+                "tasks": [
+                    {
+                        "task_id": config.tasks[0],
+                        "task_digest": task_digest,
+                        "status": "ADMITTED",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    jar = tmp_path / "agent.jar"
+    jar.write_bytes(b"fake jar")
+
+    result = doctor(
+        config,
+        tmp_path / "unused-local-tasks",
+        admission_path,
+        tmp_path / "preflight.json",
+        jar_path=jar,
+        container_cli="podman",
+        environment={"DEEPSEEK_API_KEY": "present"},
+        command_probe=lambda command: True,
+        which=lambda command: command,
+        free_bytes=MINIMUM_FREE_BYTES,
+        harbor_version="0.20.0",
+    )
+
+    assert result["status"] == "READY"
+    dataset_check = next(check for check in result["checks"] if check["name"] == "dataset")
+    assert dataset_check["detail"] == "pinned registry dataset and task digests match admission"
