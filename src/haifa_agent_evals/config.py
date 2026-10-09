@@ -135,13 +135,15 @@ def load_config(path: Path) -> EvaluationConfig:
         raise ValueError("MVP supports exactly one attempt per candidate/task")
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout < 1:
         raise ValueError("timeoutMinutes must be a positive integer")
+    concurrency_ok = 1 <= concurrency <= 16 if isinstance(concurrency, int) else False
+    if isinstance(concurrency, bool) or not concurrency_ok:
+        raise ValueError("concurrency must be an integer between 1 and 16")
     for name, value in (
-        ("concurrency", concurrency),
         ("setupTimeoutMinutes", setup_timeout),
         ("verifierTimeoutMinutes", verifier_timeout),
     ):
-        if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 16:
-            raise ValueError(f"{name} must be an integer between 1 and 16")
+        if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 240:
+            raise ValueError(f"{name} must be an integer between 1 and 240")
 
     return EvaluationConfig(
         id=_safe_id(raw["id"], "id"),
