@@ -1,0 +1,26 @@
+# Terminal-Bench 2.0 warm-up: 10 representative tasks, one attempt.
+# Covers 8 categories (software-engineering x3 incl. easy/medium/hard,
+# system-administration, scientific-computing, security, data-science,
+# debugging, file-operations, model-training). Skips heavyweight virtualization
+# (qemu/windows) and >60min build tasks; single concurrency on 2vCPU/4G hosts.
+id: coding-terminal-bench2-glm53-warm10-v1
+dataset: terminal-bench/terminal-bench-2@sha256:c6fc2e2382c1dbae99b2d5ecd2f4f4a60c3c01e0d84642d69b4afd92e99d078b
+datasetTrust: upstream-verified
+tasks:
+  - terminal-bench/fix-git
+  - terminal-bench/polyglot-c-py
+  - terminal-bench/write-compressor
+  - terminal-bench/nginx-request-logging
+  - terminal-bench/adaptive-rejection-sampler
+  - terminal-bench/vulnerable-secret
+  - terminal-bench/query-optimize
+  - terminal-bench/merge-diff-arc-agi-task
+  - terminal-bench/gcode-to-text
+  - terminal-bench/pytorch-model-recovery
+attempts: 1
+timeoutMinutes: 30
+candidates:
+  - id: terminus
+    agent: terminus-2
+    model: zai/glm-5.3-flash
+    provider: zhipu
