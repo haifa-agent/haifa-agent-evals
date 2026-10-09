@@ -31,6 +31,7 @@ _DEEPSEEK_TARGET = "https://api.deepseek.com/"
 _CLIPROXYAPI_TARGET = "http://host.containers.internal:28317/v1/models"
 _CODEX_TARGET = "https://chatgpt.com/backend-api/codex"
 _TOKENRHYTHM_TARGET = "https://tokenrhythm.studio/v1"
+_ZHIPU_TARGET = "https://open.bigmodel.cn/api/paas/v4/"
 
 
 @dataclass(frozen=True)
@@ -113,8 +114,23 @@ def _provider_requirements(
     if "tokenrhythm" in providers:
         required_credentials.add("TR_API_KEY")
         targets.add(_TOKENRHYTHM_TARGET)
+    if "zhipu" in providers:
+        required_credentials.add("BIGMODEL_API_KEY")
+        api_base = environment.get("BIGMODEL_API_BASE", "").strip()
+        if api_base:
+            targets.add(api_base if api_base.endswith("/") else f"{api_base}/")
+        else:
+            targets.add(_ZHIPU_TARGET)
     unsupported = sorted(
-        providers - {"deepseek", "aliyun-bailian", "cliproxyapi-antigravity", "openai-codex", "tokenrhythm"}
+        providers
+        - {
+            "deepseek",
+            "aliyun-bailian",
+            "cliproxyapi-antigravity",
+            "openai-codex",
+            "tokenrhythm",
+            "zhipu",
+        }
     )
     if unsupported:
         return (

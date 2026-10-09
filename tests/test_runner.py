@@ -114,6 +114,26 @@ def test_builds_bailian_haifa_agent_with_separate_config(tmp_path: Path) -> None
     assert str(agent["kwargs"]["config_path"]).endswith("haifa-eval-bailian-responses.yaml")
 
 
+def test_builds_terminus2_zhipu_agent_env(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="tb2-smoke",
+        dataset="terminal-bench/terminal-bench-2@sha256:" + "0" * 64,
+        tasks=("terminal-bench/overfull-hbox",),
+        attempts=1,
+        timeout_minutes=60,
+        candidates=(Candidate("terminus", "terminus-2", "zai/glm-5.3-flash", "zhipu"),),
+    )
+
+    agent = build_job_config(config, tmp_path)["agents"][0]
+
+    assert agent["model_name"] == "zai/glm-5.3-flash"
+    assert agent["name"] == "terminus-2"
+    assert agent["env"] == {
+        "ZAI_API_KEY": "${BIGMODEL_API_KEY}",
+        "ZAI_API_BASE": "${BIGMODEL_API_BASE}",
+    }
+
+
 def test_uses_complete_local_task_cache(tmp_path: Path, monkeypatch) -> None:
     tasks = tmp_path / "selected-tasks"
     (tasks / "task-a").mkdir(parents=True)

@@ -23,7 +23,16 @@ _UPSTREAM_DATASET_POLICIES: dict[str, dict[str, str]] = {
             "https://github.com/harbor-framework/harbor/blob/main/"
             "adapters/swebench/parity_experiment.json"
         ),
-    }
+    },
+    "terminal-bench/terminal-bench-2": {
+        "policyId": "terminal-bench-2-harbor-v1",
+        "benchmark": "https://www.tbench.ai/",
+        "harborDataset": (
+            "https://www.harborframework.com/docs/tutorials/running-terminal-bench"
+        ),
+        "harborTaskRepo": "https://github.com/laude-institute/terminal-bench-2",
+        "harborPaper": "https://openreview.net/forum?id=a7Qa4CcHak",
+    },
 }
 
 

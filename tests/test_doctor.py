@@ -128,6 +128,58 @@ def test_doctor_accepts_bailian_provider_without_exposing_endpoint(
     assert "workspace-123" not in rendered
 
 
+def test_doctor_accepts_terminus2_zhipu_without_exposing_key(tmp_path: Path) -> None:
+    config = EvaluationConfig(
+        id="tb2-smoke",
+        dataset="terminal-bench/terminal-bench-2@sha256:" + "0" * 64,
+        tasks=("terminal-bench/overfull-hbox",),
+        attempts=1,
+        timeout_minutes=60,
+        candidates=(Candidate("terminus", "terminus-2", "zai/glm-5.3-flash", "zhipu"),),
+        dataset_trust="upstream-verified",
+    )
+    admission_path = tmp_path / "admission.json"
+    admission_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 2,
+                "evalId": config.id,
+                "dataset": config.dataset,
+                "manifestDigest": config.dataset.rsplit("@", 1)[1],
+                "status": "ADMITTED",
+                "trustMode": "UPSTREAM_VERIFIED",
+                "policyId": "terminal-bench-2-harbor-v1",
+                "tasks": [
+                    {
+                        "task_id": config.tasks[0],
+                        "task_digest": "sha256:" + "d" * 64,
+                        "status": "ADMITTED",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "preflight.json"
+
+    result = doctor(
+        config,
+        tmp_path / "tasks",
+        admission_path,
+        output,
+        container_cli="docker",
+        environment={"BIGMODEL_API_KEY": "bigmodel-secret"},
+        command_probe=lambda command: True,
+        which=lambda command: command,
+        free_bytes=MINIMUM_FREE_BYTES,
+        harbor_version="0.20.0",
+    )
+
+    assert result["status"] == "READY"
+    rendered = output.read_text(encoding="utf-8")
+    assert "bigmodel-secret" not in rendered
+
+
 def test_doctor_accepts_cliproxyapi_antigravity_without_exposing_key(
     tmp_path: Path, monkeypatch
 ) -> None:

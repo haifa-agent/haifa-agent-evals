@@ -153,6 +153,36 @@ def test_admits_pinned_upstream_verified_registry_subset(tmp_path: Path) -> None
     assert "parity_experiment.json" in result["upstreamEvidence"]["harborParity"]
 
 
+def test_admits_terminal_bench_2_registry_subset(tmp_path: Path) -> None:
+    digest = "sha256:" + "c" * 64
+    task_digest = "sha256:" + "d" * 64
+    config = EvaluationConfig(
+        id="tb2-smoke",
+        dataset=f"terminal-bench/terminal-bench-2@{digest}",
+        tasks=("terminal-bench/overfull-hbox",),
+        attempts=1,
+        timeout_minutes=60,
+        candidates=(Candidate("terminus", "terminus-2", "zai/glm-5.3-flash", "zhipu"),),
+        dataset_trust="upstream-verified",
+    )
+    output = tmp_path / "admission.json"
+
+    result = admit_upstream_verified(
+        config,
+        output,
+        resolver=lambda _dataset: RegistryDatasetEvidence(
+            name="terminal-bench/terminal-bench-2",
+            digest=digest,
+            task_digests={config.tasks[0]: task_digest},
+        ),
+    )
+
+    assert result["status"] == "ADMITTED"
+    assert result["policyId"] == "terminal-bench-2-harbor-v1"
+    assert result["tasks"][0]["task_digest"] == task_digest
+    assert "tbench.ai" in result["upstreamEvidence"]["benchmark"]
+
+
 def test_rejects_untrusted_upstream_dataset(tmp_path: Path) -> None:
     config = EvaluationConfig(
         id="untrusted",

@@ -40,7 +40,15 @@ def _agent_config(candidate: Candidate, timeout_seconds: int) -> dict[str, objec
     else:
         result["name"] = candidate.agent
     provider = candidate.resolved_provider()
-    if candidate.id == "haifa" and provider == "deepseek":
+    if candidate.agent == "terminus-2" and provider == "zhipu":
+        # LiteLLM's built-in "zai/" provider only reads ZAI_API_KEY/ZAI_API_BASE
+        # inside the trial container; host-side credential naming is BIGMODEL.*
+        # and is mapped here exactly once.
+        result["env"] = {
+            "ZAI_API_KEY": "${BIGMODEL_API_KEY}",
+            "ZAI_API_BASE": "${BIGMODEL_API_BASE}",
+        }
+    elif candidate.id == "haifa" and provider == "deepseek":
         result["env"] = {"DEEPSEEK_API_KEY": "${DEEPSEEK_API_KEY}"}
     elif candidate.id == "haifa" and provider == "aliyun-bailian":
         result["env"] = {
@@ -78,6 +86,10 @@ def _agent_config(candidate: Candidate, timeout_seconds: int) -> dict[str, objec
         result["env"] = {
             "TR_API_KEY": "${TR_API_KEY}",
             "HAIFA_MODEL_ID": candidate.model,
+            "http_proxy": "",
+            "https_proxy": "",
+            "HTTP_PROXY": "",
+            "HTTPS_PROXY": "",
         }
         result["kwargs"] = {
             "config_path": str(

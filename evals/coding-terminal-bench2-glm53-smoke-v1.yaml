@@ -1,0 +1,19 @@
+# Terminal-Bench 2.0 (89 tasks, ICLR 2026) adapter on Harbor.
+# Dataset identity is pinned to the Harbor package registry digest; trust is
+# upstream-verified because tasks, oracle solutions, and verifiers are
+# maintained and human-verified by the Terminal-Bench team.
+# Smoke selects two small tasks (LaTeX hygiene + TLS certificate setup); the
+# full 89-task run must enumerate every terminal-bench/... task id explicitly.
+id: coding-terminal-bench2-glm53-smoke-v1
+dataset: terminal-bench/terminal-bench-2@sha256:c6fc2e2382c1dbae99b2d5ecd2f4f4a60c3c01e0d84642d69b4afd92e99d078b
+datasetTrust: upstream-verified
+tasks:
+  - terminal-bench/overfull-hbox
+  - terminal-bench/openssl-selfsigned-cert
+attempts: 1
+timeoutMinutes: 60
+candidates:
+  - id: terminus
+    agent: terminus-2
+    model: zai/glm-5.3-flash
+    provider: zhipu
