@@ -1,0 +1,6 @@
+# PyPI is unreachable/slow from the cn snapshot machines used for remote
+# evaluation; pin the resolution index to the Aliyun mirror. The mirrored
+# packages are bit-identical, so hashes stay valid.
+[[index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
