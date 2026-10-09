@@ -7,7 +7,12 @@ from typing import Any
 import yaml
 
 _REQUIRED_EVAL_FIELDS = {"id", "dataset", "tasks", "attempts", "timeoutMinutes", "candidates"}
-_OPTIONAL_EVAL_FIELDS = {"datasetTrust", "concurrency"}
+_OPTIONAL_EVAL_FIELDS = {
+    "datasetTrust",
+    "concurrency",
+    "setupTimeoutMinutes",
+    "verifierTimeoutMinutes",
+}
 _CANDIDATE_FIELDS = {"id", "agent", "model", "provider"}
 _FLOATING_DATASET_REFS = {"latest", "main", "head"}
 _SAFE_ID_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
@@ -41,6 +46,8 @@ class EvaluationConfig:
     candidates: tuple[Candidate, ...]
     dataset_trust: str = PER_TASK_CALIBRATED
     concurrency: int = 1
+    setup_timeout_minutes: int = 10
+    verifier_timeout_minutes: int = 10
 
 
 def _mapping(value: Any, label: str) -> dict[str, Any]:
@@ -122,17 +129,19 @@ def load_config(path: Path) -> EvaluationConfig:
     attempts = raw["attempts"]
     timeout = raw["timeoutMinutes"]
     concurrency = raw.get("concurrency", 1)
+    setup_timeout = raw.get("setupTimeoutMinutes", 10)
+    verifier_timeout = raw.get("verifierTimeoutMinutes", 10)
     if attempts != 1 or isinstance(attempts, bool):
         raise ValueError("MVP supports exactly one attempt per candidate/task")
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout < 1:
         raise ValueError("timeoutMinutes must be a positive integer")
-    if (
-        not isinstance(concurrency, int)
-        or isinstance(concurrency, bool)
-        or concurrency < 1
-        or concurrency > 16
+    for name, value in (
+        ("concurrency", concurrency),
+        ("setupTimeoutMinutes", setup_timeout),
+        ("verifierTimeoutMinutes", verifier_timeout),
     ):
-        raise ValueError("concurrency must be an integer between 1 and 16")
+        if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 16:
+            raise ValueError(f"{name} must be an integer between 1 and 16")
 
     return EvaluationConfig(
         id=_safe_id(raw["id"], "id"),
@@ -143,4 +152,6 @@ def load_config(path: Path) -> EvaluationConfig:
         candidates=tuple(candidates),
         dataset_trust=dataset_trust,
         concurrency=concurrency,
+        setup_timeout_minutes=setup_timeout,
+        verifier_timeout_minutes=verifier_timeout,
     )

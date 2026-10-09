@@ -28,12 +28,14 @@ _local_tasks_path = local_tasks_path
 _validate_local_dataset = validate_local_dataset
 
 
-def _agent_config(candidate: Candidate, timeout_seconds: int) -> dict[str, object]:
+def _agent_config(
+    candidate: Candidate, timeout_seconds: int, setup_timeout_seconds: int
+) -> dict[str, object]:
     result: dict[str, object] = {
         "model_name": candidate.model,
         "override_timeout_sec": timeout_seconds,
         "max_timeout_sec": timeout_seconds,
-        "override_setup_timeout_sec": 600,
+        "override_setup_timeout_sec": setup_timeout_seconds,
     }
     if ":" in candidate.agent:
         result["import_path"] = candidate.agent
@@ -163,9 +165,15 @@ def build_job_config(
         "quiet": False,
         "retry": {"max_retries": 0},
         "environment": environment,
-        "verifier": {"override_timeout_sec": 600, "max_timeout_sec": 600},
+        "verifier": {
+            "override_timeout_sec": config.verifier_timeout_minutes * 60,
+            "max_timeout_sec": config.verifier_timeout_minutes * 60,
+        },
         "agents": [
-            _agent_config(candidate, config.timeout_minutes * 60) for candidate in config.candidates
+            _agent_config(
+                candidate, config.timeout_minutes * 60, config.setup_timeout_minutes * 60
+            )
+            for candidate in config.candidates
         ],
         "datasets": [dataset],
     }
