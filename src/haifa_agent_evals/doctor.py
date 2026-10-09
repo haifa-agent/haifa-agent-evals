@@ -382,7 +382,10 @@ def doctor(
 
     available = free_bytes
     if available is None:
-        available = shutil.disk_usage(tasks_path).free if tasks_path.exists() else 0
+        # tasks_path may not exist for upstream-verified (registry) datasets on
+        # a fresh machine; measure the working tree instead of reporting 0.
+        disk_probe_path = tasks_path if tasks_path.exists() else Path.cwd()
+        available = shutil.disk_usage(disk_probe_path).free
     checks.append(
         DoctorCheck(
             "disk",
