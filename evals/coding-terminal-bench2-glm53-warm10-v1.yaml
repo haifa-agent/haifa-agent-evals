@@ -1,4 +1,4 @@
-# Terminal-Bench 2.0 warm-up: 10 representative tasks, one attempt.
+﻿# Terminal-Bench 2.0 warm-up: 10 representative tasks, one attempt.
 # Covers 8 categories (software-engineering x3 incl. easy/medium/hard,
 # system-administration, scientific-computing, security, data-science,
 # debugging, file-operations, model-training). Skips heavyweight virtualization
@@ -18,7 +18,9 @@ tasks:
   - terminal-bench/gcode-to-text
   - terminal-bench/pytorch-model-recovery
 attempts: 1
-timeoutMinutes: 30
+timeoutMinutes: 60
+setupTimeoutMinutes: 30
+verifierTimeoutMinutes: 30
 candidates:
   - id: terminus
     agent: terminus-2

@@ -11,3 +11,4 @@ tmp/
 *.db
 *.sqlite
 *.jsonl
+local-tmp/
