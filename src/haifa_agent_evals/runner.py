@@ -167,7 +167,13 @@ def build_job_config(
             "path": str(tasks_path.resolve()),
             "task_names": [task.rsplit("/", 1)[-1] for task in config.tasks],
         }
-    environment: dict[str, object] = {"type": "docker", "delete": True}
+    environment: dict[str, object] = {
+        "type": "docker",
+        "import_path": (
+            "haifa_agent_evals.integrations.harbor.docker_environment:EvaluationDockerEnvironment"
+        ),
+        "delete": True,
+    }
     if extra_docker_compose is not None:
         environment["extra_docker_compose"] = [str(extra_docker_compose.resolve())]
     return {

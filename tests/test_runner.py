@@ -49,6 +49,7 @@ def test_builds_one_harbor_job_for_all_candidates(tmp_path: Path) -> None:
 
     job_config = build_job_config(config, tmp_path)
     assert job_config["n_concurrent_trials"] == 1
+    assert job_config["environment"]["import_path"].endswith(":EvaluationDockerEnvironment")
     assert len(job_config["agents"]) == 2
     assert job_config["datasets"][0]["ref"] == "v1"
 

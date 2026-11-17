@@ -297,6 +297,9 @@ uv run evals doctor --config <eval.yaml> --tasks-path <tasks> --admission <admis
 uv run evals run --config <eval.yaml> --tasks-path <tasks> --admission <admission.json> --container-cli podman
 ```
 
+单步任务的独立 Linux verifier 在容器内以 root 创建 `/logs/verifier`，并由 Harbor 在判分后复制日志和 reward。
+这样判分脚本可以执行原有的目录属主检查，宿主运行账户也能读取归档。共享 verifier 和多步任务继续使用 Harbor 的挂载方式。
+
 当前 Harbor 0.20 在 Windows Podman compatibility wrapper 下启用 phase `network_mode=no-network` 时，
 平台探测会在环境启动前失败。因此 v4 已保证依赖客户端离线和依赖缓存完整，但尚未声称强制阻断容器
 全部直接 egress；升级或修复 Harbor/Podman 兼容后应再启用 verifier phase 的网络隔离。
