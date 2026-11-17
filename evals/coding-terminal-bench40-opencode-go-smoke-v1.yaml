@@ -1,0 +1,14 @@
+id: coding-terminal-bench40-opencode-go-smoke-v1
+dataset: terminal-bench/terminal-bench@sha256:39d9f44b40420cde8fdcc087579c0d72a7e14fa3656d603c3f0d22fb35e27732
+datasetTrust: upstream-verified
+tasks: [terminal-bench/react-lead-form]
+attempts: 1
+concurrency: 1
+timeoutMinutes: 45
+setupTimeoutMinutes: 30
+verifierTimeoutMinutes: 30
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: deepseek-v4.1-flash
+    provider: opencode-go

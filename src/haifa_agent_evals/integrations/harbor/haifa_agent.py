@@ -11,7 +11,12 @@ from harbor.agents.installed.base import BaseInstalledAgent, NonZeroAgentExitCod
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 
-from haifa_agent_evals.codex_auth import codex_auth_path, minimal_codex_auth
+from haifa_agent_evals.codex_auth import (
+    codex_auth_path,
+    minimal_codex_auth,
+    minimal_opencode_go_auth,
+    opencode_go_auth_path,
+)
 
 _CONTAINER_ROOT = "/opt/haifa"
 _JAR_PATH = f"{_CONTAINER_ROOT}/haifa-agent.jar"
@@ -24,6 +29,7 @@ _ARCHIVED_TRANSCRIPT_ROOT = "/logs/agent/haifa-transcripts"
 _JAVA_ARCHIVE_PATH = "/tmp/haifa-java.tar.gz"
 _CODEX_AUTH_UPLOAD_PATH = "/tmp/haifa-codex-auth.json"
 _CODEX_AUTH_PATH = "/root/.haifa-agent/auth.json"
+_OPENCODE_AUTH_HOME = "/opt/haifa/auth-home"
 _JAVA_ARCHIVE_URL = (
     "https://github.com/adoptium/temurin21-binaries/releases/download/"
     "jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz"
@@ -39,7 +45,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-class HaifaCodingAgent(BaseInstalledAgent):
+class HaifaAgentAdapter:
     """Thin Harbor adapter around the existing Haifa shaded CLI JAR."""
 
     def __init__(
@@ -51,6 +57,8 @@ class HaifaCodingAgent(BaseInstalledAgent):
         loopback_relay_host: str | None = None,
         loopback_relay_port: int | None = None,
         codex_auth: bool = False,
+        opencode_go_auth: bool = False,
+        timeout_seconds: int = 1200,
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -85,6 +93,14 @@ class HaifaCodingAgent(BaseInstalledAgent):
         self.codex_auth_path = codex_auth_path() if codex_auth else None
         if self.codex_auth_path is not None:
             minimal_codex_auth(self.codex_auth_path)
+        self.opencode_go_auth_path = opencode_go_auth_path() if opencode_go_auth else None
+        if self.opencode_go_auth_path is not None:
+            if codex_auth or loopback_relay_host is not None:
+                raise ValueError("OpenCode Go requires its own connection and HTTPS endpoint")
+            minimal_opencode_go_auth(self.opencode_go_auth_path)
+        if timeout_seconds <= 0:
+            raise ValueError("Haifa trial timeout must be positive")
+        self.timeout_seconds = timeout_seconds
         if (loopback_relay_host is None) != (loopback_relay_port is None):
             raise ValueError("loopback relay host and port must be configured together")
         if loopback_relay_port is not None and not 1 <= loopback_relay_port <= 65535:
@@ -155,6 +171,22 @@ class HaifaCodingAgent(BaseInstalledAgent):
                     f"rm {_CODEX_AUTH_UPLOAD_PATH}"
                 ),
             )
+        if self.opencode_go_auth_path is not None:
+            payload = minimal_opencode_go_auth(self.opencode_go_auth_path)
+            with tempfile.TemporaryDirectory(prefix="haifa-eval-opencode-auth-") as directory:
+                temporary_auth = Path(directory) / "auth.json"
+                temporary_auth.write_bytes(payload)
+                temporary_auth.chmod(0o600)
+                await environment.upload_file(temporary_auth, _CODEX_AUTH_UPLOAD_PATH)
+            await self.exec_as_root(
+                environment,
+                command=(
+                    f"install -d -m 0700 {_OPENCODE_AUTH_HOME}/.haifa-agent && "
+                    f"install -m 0600 {_CODEX_AUTH_UPLOAD_PATH} "
+                    f"{_OPENCODE_AUTH_HOME}/.haifa-agent/auth.json && "
+                    f"rm {_CODEX_AUTH_UPLOAD_PATH}"
+                ),
+            )
         await self.exec_as_root(
             environment,
             command=(
@@ -190,16 +222,29 @@ class HaifaCodingAgent(BaseInstalledAgent):
                 "RELAY_PID=$!; trap 'kill $RELAY_PID 2>/dev/null || true' EXIT; "
                 "sleep 1; kill -0 $RELAY_PID; "
             )
-        command = relay_prefix + (
+        auth_options = ""
+        if self.opencode_go_auth_path is not None:
+            auth_options = (
+                "export HAIFA_CODING_AUTH_STORE=file; "
+                f"trap 'rm -f {_OPENCODE_AUTH_HOME}/.haifa-agent/auth.json' EXIT; "
+            )
+        java_options = (
+            f"-Duser.home={_OPENCODE_AUTH_HOME} " if self.opencode_go_auth_path is not None else ""
+        )
+        command = relay_prefix + auth_options + (
             f"JAVA=$([ -x {_CONTAINER_ROOT}/java/bin/java ] && "
             f"echo {_CONTAINER_ROOT}/java/bin/java || command -v java); "
             'WORKSPACE=$(pwd -P); "$JAVA" '
-            f'-jar {_JAR_PATH} --workspace "$WORKSPACE" --config {_CONFIG_PATH} '
-            "--approval auto --timeout PT20M --trace jsonl "
+            f'{java_options}-jar {_JAR_PATH} --workspace "$WORKSPACE" --config {_CONFIG_PATH} '
+            f"--approval auto --timeout PT{self.timeout_seconds}S --trace jsonl "
             "--trace-file /logs/agent/haifa-trace.jsonl "
             f"--message {shlex.quote(instruction)}"
         )
-        result = await environment.exec(command=command, timeout_sec=1200)
+        result = await environment.exec(
+            command=command,
+            timeout_sec=self.timeout_seconds,
+            **({"user": "root"} if self.opencode_go_auth_path is not None else {}),
+        )
         archive = await environment.exec(
             command=(
                 "set -eu; "
@@ -218,6 +263,10 @@ class HaifaCodingAgent(BaseInstalledAgent):
         if archive.return_code != 0:
             raise RuntimeError("Haifa SQLite/JSONL trajectory could not be archived")
         if result.return_code != 0:
-            raise NonZeroAgentExitCodeError(
+            raise self.nonzero_exit_error(
                 f"Haifa CLI exited with code {result.return_code}; verifier remains authoritative"
             )
+
+
+class HaifaCodingAgent(HaifaAgentAdapter, BaseInstalledAgent):
+    nonzero_exit_error = NonZeroAgentExitCodeError

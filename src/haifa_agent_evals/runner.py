@@ -123,6 +123,19 @@ def _agent_config(
             ),
             "codex_auth": True,
         }
+    elif candidate.id == "haifa" and provider == "opencode-go":
+        if candidate.model != "deepseek-v4.1-flash":
+            raise ValueError(f"unsupported OpenCode Go evaluation model: {candidate.model}")
+        result["kwargs"] = {
+            "config_path": str(
+                Path(__file__).resolve().parent
+                / "integrations"
+                / "harbor"
+                / "haifa-eval-opencode-go.yaml"
+            ),
+            "opencode_go_auth": True,
+            "timeout_seconds": timeout_seconds,
+        }
     elif candidate.id == "haifa":
         raise ValueError(f"unsupported Haifa evaluation provider: {provider}")
     elif candidate.id == "aider":

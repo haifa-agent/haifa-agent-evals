@@ -1,0 +1,42 @@
+models:
+  default: opencode-go-deepseek-flash
+  providers:
+    - id: opencode-go
+      endpoint: https://opencode.ai/inference/go/openai/v1
+      credentialRef: model-auth://opencode-go/default
+      nativeStreaming: true
+      reasoningMode: ENABLED
+      reasoningEffort: HIGH
+      allowedBindings: [opencode-go-deepseek-flash]
+
+tools:
+  enabled: [file_list, file_stat, file_read, file_create, file_write, file_patch, file_delete, file_move, execution_run]
+
+skills:
+  allowed: []
+
+approval:
+  mode: auto
+
+execution:
+  provider: host-guarded
+  network: allow
+  shell: auto
+  defaultTimeoutMillis: 120000
+  maxTimeoutMillis: 600000
+  maxOutputLines: 2000
+  maxOutputBytes: 51200
+  maxProcesses: 32
+
+runtime:
+  maxIterations: 100
+  maxToolCalls: 100
+  maxWallTimeMillis: 2700000
+
+persistence:
+  mode: SQLITE_WITH_JSONL
+  databasePath: /tmp/haifa-runtime.db
+  transcriptRoot: /tmp/haifa-transcripts
+  protection: NONE
+  busyTimeoutMillis: 5000
+  maximumPayloadBytes: 1048576

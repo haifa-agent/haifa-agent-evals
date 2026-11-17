@@ -36,6 +36,28 @@
 
 ## 运行命令
 
+Terminal-Bench 4.0 和 4.1 的 OpenCode Go 冒烟配置分别为
+`evals/coding-terminal-bench40-opencode-go-smoke-v1.yaml` 与
+`evals/coding-terminal-bench41-opencode-go-smoke-v1.yaml`。两份配置固定了不同的
+Harbor 版本摘要，并复用同一道 React 仓库任务。准备 Java 21、Haifa CLI JAR 和
+Linux 文件凭据存储后，通过 `HAIFA_EVAL_JAR_PATH`、`HAIFA_EVAL_JAVA_ARCHIVE_PATH` 与
+`HAIFA_EVAL_OPENCODE_GO_AUTH_PATH` 指向对应文件。设备登录用
+`haifa auth connect --provider opencode-go --method device --store file`，评测只将该连接
+复制到临时容器。先执行 `evals admit` 和 `evals doctor`，再执行 `evals run`。
+
+DeepSWE v1.1 通过上游指定的 Pier 0.3.1 运行。把
+`datacurve-ai/deep-swe` 检出到 `0b9fabbb63b9104d678fe965e1632f2dd9eaa2ea`，
+复用同一套 JAR、JDK 压缩包与 OpenCode Go 文件凭据，运行固定的 Anko 参数任务：
+
+```bash
+uv run --group deepswe pier run --path /path/to/deep-swe/tasks/anko-default-function-arguments \
+  --agent-import-path haifa_agent_evals.integrations.pier.haifa_agent:HaifaCodingAgent \
+  --model opencode-go/deepseek-v4.1-flash --n-concurrent 1 --jobs-dir work/runs/deepswe
+```
+
+Pier 保留 agent 与 verifier 的独立容器和官方提交补丁判分。冒烟任务均使用
+DeepSeek V4.1 Flash、HIGH 推理档、45 分钟 agent 上限和单并发。
+
 ```bash
 uv sync --frozen
 uv run evals admit --config evals/coding-smoke-v1.yaml \
@@ -70,8 +92,8 @@ uv run pytest
 离线依赖三项人工复核重点；它不修改 Harbor Reward，也不替代 Harbor Verifier。
 
 配置显式声明 `datasetTrust: upstream-verified` 时，`admit` 改为从 Harbor Package Registry 解析精确
-Dataset 与所选 Task digest，并且只接受仓库内受信策略目录中列出的上游评测。当前目录仅包含
-`swe-bench/swe-bench-verified`；这种准入依赖上游 Benchmark 身份、Harbor Adapter/Parity 证据和精确
+Dataset 与所选 Task digest，并且只接受仓库内受信策略目录中列出的上游评测，包括
+`swe-bench/swe-bench-verified` 与 Terminal-Bench；这种准入依赖上游 Benchmark 身份及精确
 Registry digest，不伪造本地 Oracle/NOP 校准。该模式仍只把 Harbor Verifier 作为正确性事实源，小规模
 Smoke 结果不得解释为 SWE-bench 分数估计。
 

@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 CODEX_AUTH_REFERENCE = "model-auth://openai-codex/default"
+OPENCODE_GO_AUTH_REFERENCE = "model-auth://opencode-go/default"
 _MAX_AUTH_FILE_BYTES = 1024 * 1024
 _ROOT_FIELDS = {"version", "credentials"}
 _CREDENTIAL_FIELDS = {
@@ -30,8 +31,16 @@ _MINIMUM_TOKEN_LIFETIME_MILLIS = 5 * 60 * 1000
 
 
 def codex_auth_path(environment: Mapping[str, str] | None = None) -> Path:
+    return _auth_path("HAIFA_EVAL_CODEX_AUTH_PATH", environment)
+
+
+def opencode_go_auth_path(environment: Mapping[str, str] | None = None) -> Path:
+    return _auth_path("HAIFA_EVAL_OPENCODE_GO_AUTH_PATH", environment)
+
+
+def _auth_path(variable: str, environment: Mapping[str, str] | None) -> Path:
     current = environment or os.environ
-    configured = current.get("HAIFA_EVAL_CODEX_AUTH_PATH", "").strip()
+    configured = current.get(variable, "").strip()
     return (
         Path(configured).expanduser().resolve()
         if configured
@@ -40,41 +49,58 @@ def codex_auth_path(environment: Mapping[str, str] | None = None) -> Path:
 
 
 def minimal_codex_auth(path: Path) -> bytes:
+    return _minimal_auth(path, CODEX_AUTH_REFERENCE, "openai-codex", "Codex")
+
+
+def minimal_opencode_go_auth(path: Path) -> bytes:
+    return _minimal_auth(
+        path, OPENCODE_GO_AUTH_REFERENCE, "opencode-go", "OpenCode Go",
+        registration="opencode-go-console-v1",
+    )
+
+
+def _minimal_auth(
+    path: Path, reference: str, method: str, name: str, *, registration: str | None = None
+) -> bytes:
     if not path.is_file():
-        raise ValueError("Codex auth store is missing")
+        raise ValueError(f"{name} auth store is missing")
     if path.stat().st_size > _MAX_AUTH_FILE_BYTES:
-        raise ValueError("Codex auth store exceeds the size limit")
+        raise ValueError(f"{name} auth store exceeds the size limit")
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError("Codex auth store is unreadable") from error
+        raise ValueError(f"{name} auth store is unreadable") from error
     if not isinstance(raw, dict) or set(raw) != _ROOT_FIELDS or raw.get("version") != 1:
-        raise ValueError("Codex auth store root is invalid")
+        raise ValueError(f"{name} auth store root is invalid")
     credentials = raw.get("credentials")
     if not isinstance(credentials, dict):
-        raise ValueError("Codex auth credentials are invalid")
-    credential = credentials.get(CODEX_AUTH_REFERENCE)
+        raise ValueError(f"{name} auth credentials are invalid")
+    credential = credentials.get(reference)
     if not isinstance(credential, dict) or set(credential) != _CREDENTIAL_FIELDS:
-        raise ValueError("Codex auth credential is missing or invalid")
-    if credential.get("kind") != "EXTERNAL" or credential.get("method_id") != "openai-codex":
-        raise ValueError("Codex auth credential identity is invalid")
+        raise ValueError(f"{name} auth credential is missing or invalid")
+    if (
+        credential.get("kind") != "EXTERNAL"
+        or credential.get("method_id") != method
+        or (registration and credential.get("client_registration_ref") != registration)
+    ):
+        raise ValueError(f"{name} auth credential identity is invalid")
     if any(
         not isinstance(credential.get(field), str) or not credential[field].strip()
         for field in _TEXT_FIELDS
     ):
-        raise ValueError("Codex auth credential text fields are invalid")
+        raise ValueError(f"{name} auth credential text fields are invalid")
     if any(
         not isinstance(credential.get(field), int)
         or isinstance(credential[field], bool)
         or credential[field] <= 0
         for field in _INTEGER_FIELDS
     ):
-        raise ValueError("Codex auth credential timestamps are invalid")
+        raise ValueError(f"{name} auth credential timestamps are invalid")
     minimum_expiry = int(time.time() * 1000) + _MINIMUM_TOKEN_LIFETIME_MILLIS
     if credential["expires_at_epoch_millis"] <= minimum_expiry:
-        raise ValueError("Codex auth credential is expired or expires too soon")
+        raise ValueError(f"{name} auth credential is expired or expires too soon")
     payload = {
         "version": 1,
-        "credentials": {CODEX_AUTH_REFERENCE: credential},
+        "credentials": {reference: credential},
     }
     return (json.dumps(payload, separators=(",", ":")) + "\n").encode()

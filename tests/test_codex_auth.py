@@ -3,7 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from haifa_agent_evals.codex_auth import CODEX_AUTH_REFERENCE, minimal_codex_auth
+from haifa_agent_evals.codex_auth import (
+    CODEX_AUTH_REFERENCE,
+    OPENCODE_GO_AUTH_REFERENCE,
+    minimal_codex_auth,
+    minimal_opencode_go_auth,
+)
 
 
 def _credential() -> dict[str, object]:
@@ -64,3 +69,27 @@ def test_minimal_codex_auth_rejects_expired_credential(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="expired or expires too soon"):
         minimal_codex_auth(source)
+
+
+def test_opencode_go_auth_projects_only_the_device_login(tmp_path: Path) -> None:
+    source = tmp_path / "auth.json"
+    go_login = {
+        **_credential(),
+        "method_id": "opencode-go",
+        "client_registration_ref": "opencode-go-console-v1",
+    }
+    source.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "credentials": {
+                    CODEX_AUTH_REFERENCE: _credential(),
+                    OPENCODE_GO_AUTH_REFERENCE: go_login,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    credentials = json.loads(minimal_opencode_go_auth(source))["credentials"]
+    assert credentials == {OPENCODE_GO_AUTH_REFERENCE: go_login}

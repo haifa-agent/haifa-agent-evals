@@ -12,6 +12,12 @@ from haifa_agent_evals.config import UPSTREAM_VERIFIED, EvaluationConfig
 from haifa_agent_evals.dataset import dataset_manifest_path, validate_local_dataset
 
 _UPSTREAM_DATASET_POLICIES: dict[str, dict[str, str]] = {
+    "terminal-bench/terminal-bench": {
+        "policyId": "terminal-bench-versioned-harbor-v1",
+        "benchmark": "https://www.tbench.ai/",
+        "harborDataset": "https://hub.harborframework.com/datasets/terminal-bench/terminal-bench/latest",
+        "harborTaskRepo": "https://github.com/harbor-framework/terminal-bench",
+    },
     "swe-bench/swe-bench-verified": {
         "policyId": "swe-bench-verified-harbor-v1",
         "benchmark": "https://www.swebench.com/SWE-bench/",

@@ -14,7 +14,12 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from haifa_agent_evals.admission import upstream_dataset_policy
-from haifa_agent_evals.codex_auth import codex_auth_path, minimal_codex_auth
+from haifa_agent_evals.codex_auth import (
+    codex_auth_path,
+    minimal_codex_auth,
+    minimal_opencode_go_auth,
+    opencode_go_auth_path,
+)
 from haifa_agent_evals.config import UPSTREAM_VERIFIED, EvaluationConfig
 from haifa_agent_evals.dataset import dataset_manifest_path, validate_local_dataset
 from haifa_agent_evals.environment_baseline import validate_environment_baseline
@@ -111,6 +116,8 @@ def _provider_requirements(
         targets.add(_CLIPROXYAPI_TARGET)
     if "openai-codex" in providers:
         targets.add(_CODEX_TARGET)
+    if "opencode-go" in providers:
+        targets.add("https://opencode.ai/inference/go/openai/v1/")
     if "tokenrhythm" in providers:
         required_credentials.add("TR_API_KEY")
         targets.add(_TOKENRHYTHM_TARGET)
@@ -128,6 +135,7 @@ def _provider_requirements(
             "aliyun-bailian",
             "cliproxyapi-antigravity",
             "openai-codex",
+            "opencode-go",
             "tokenrhythm",
             "zhipu",
         }
@@ -240,6 +248,12 @@ def doctor(
             checks.append(DoctorCheck("codex-auth", "FAIL", str(error)))
     else:
         checks.append(DoctorCheck("codex-auth", "SKIP", "evaluation does not use Codex OAuth"))
+    if any(candidate.resolved_provider() == "opencode-go" for candidate in config.candidates):
+        try:
+            minimal_opencode_go_auth(opencode_go_auth_path(current_environment))
+            checks.append(DoctorCheck("opencode-go-auth", "PASS", "OpenCode Go device login is ready"))
+        except ValueError as error:
+            checks.append(DoctorCheck("opencode-go-auth", "FAIL", str(error)))
     admission_check, admission_digest = _admission_check(admission_path, config)
     checks.append(admission_check)
 
