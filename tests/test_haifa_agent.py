@@ -228,6 +228,14 @@ def test_run_preserves_exit_code_and_quotes_instruction(tmp_path: Path, exit_cod
         asyncio.run(agent.run(instruction, environment, context))  # type: ignore[arg-type]
 
     command = next(command for command, _, _ in environment.commands if "--message" in command)
+    workspace_setup = (
+        'WORKSPACE=$(pwd -P) && '
+        'if [ "$WORKSPACE" = /app ]; then '
+        'WORKSPACE_PROBE=$(mktemp -d "$WORKSPACE/.haifa-eval-workspace-XXXXXX") && '
+        'rmdir "$WORKSPACE_PROBE"; fi && "$JAVA" '
+    )
+    assert workspace_setup in command
+    assert command.index(workspace_setup) < command.index('--workspace "$WORKSPACE"')
     assert "'fix '" in command
     assert "echo unsafe'" in command
     assert context.metadata == {"exit_code": exit_code, "trajectory_archived": True}

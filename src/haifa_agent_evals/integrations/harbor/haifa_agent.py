@@ -30,6 +30,13 @@ _JAVA_ARCHIVE_PATH = "/tmp/haifa-java.tar.gz"
 _CODEX_AUTH_UPLOAD_PATH = "/tmp/haifa-codex-auth.json"
 _CODEX_AUTH_PATH = "/root/.haifa-agent/auth.json"
 _OPENCODE_AUTH_HOME = "/opt/haifa/auth-home"
+# Materialize the task root in OverlayFS before Haifa records its physical identity.
+_PREPARE_WORKSPACE = (
+    'WORKSPACE=$(pwd -P) && '
+    'if [ "$WORKSPACE" = /app ]; then '
+    'WORKSPACE_PROBE=$(mktemp -d "$WORKSPACE/.haifa-eval-workspace-XXXXXX") && '
+    'rmdir "$WORKSPACE_PROBE"; fi'
+)
 _JAVA_ARCHIVE_URL = (
     "https://github.com/adoptium/temurin21-binaries/releases/download/"
     "jdk-21.0.8%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.8_9.tar.gz"
@@ -234,7 +241,7 @@ class HaifaAgentAdapter:
         command = relay_prefix + auth_options + (
             f"JAVA=$([ -x {_CONTAINER_ROOT}/java/bin/java ] && "
             f"echo {_CONTAINER_ROOT}/java/bin/java || command -v java); "
-            'WORKSPACE=$(pwd -P); "$JAVA" '
+            f'{_PREPARE_WORKSPACE} && "$JAVA" '
             f'{java_options}-jar {_JAR_PATH} --workspace "$WORKSPACE" --config {_CONFIG_PATH} '
             f"--approval auto --timeout PT{self.timeout_seconds}S --trace jsonl "
             "--trace-file /logs/agent/haifa-trace.jsonl "
