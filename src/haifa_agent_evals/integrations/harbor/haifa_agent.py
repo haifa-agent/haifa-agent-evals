@@ -240,11 +240,7 @@ class HaifaAgentAdapter:
             "--trace-file /logs/agent/haifa-trace.jsonl "
             f"--message {shlex.quote(instruction)}"
         )
-        result = await environment.exec(
-            command=command,
-            timeout_sec=self.timeout_seconds,
-            **({"user": "root"} if self.opencode_go_auth_path is not None else {}),
-        )
+        result = await self._execute_cli(environment, command)
         archive = await environment.exec(
             command=(
                 "set -eu; "
@@ -266,6 +262,13 @@ class HaifaAgentAdapter:
             raise self.nonzero_exit_error(
                 f"Haifa CLI exited with code {result.return_code}; verifier remains authoritative"
             )
+
+    async def _execute_cli(self, environment: BaseEnvironment, command: str):
+        return await environment.exec(
+            command=command,
+            timeout_sec=self.timeout_seconds,
+            **({"user": "root"} if self.opencode_go_auth_path is not None else {}),
+        )
 
 
 class HaifaCodingAgent(HaifaAgentAdapter, BaseInstalledAgent):
