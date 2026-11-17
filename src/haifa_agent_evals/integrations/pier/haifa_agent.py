@@ -22,6 +22,7 @@ class HaifaCodingAgent(HaifaAgentAdapter, BaseInstalledAgent):
             *args,
             config_path=config,
             opencode_go_auth=True,
+            private_runtime_storage=True,
             timeout_seconds=timeout_seconds,
             **kwargs,
         )

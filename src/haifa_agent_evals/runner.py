@@ -134,6 +134,7 @@ def _agent_config(
                 / "haifa-eval-opencode-go.yaml"
             ),
             "opencode_go_auth": True,
+            "private_runtime_storage": True,
             "timeout_seconds": timeout_seconds,
         }
     elif candidate.id == "haifa":

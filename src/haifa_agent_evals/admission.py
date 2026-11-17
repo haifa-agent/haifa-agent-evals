@@ -30,6 +30,14 @@ _UPSTREAM_DATASET_POLICIES: dict[str, dict[str, str]] = {
             "adapters/swebench/parity_experiment.json"
         ),
     },
+    "terminal-bench/terminal-bench-2-1": {
+        "policyId": "terminal-bench-2-1-harbor-v1",
+        "benchmark": "https://www.tbench.ai/news/terminal-bench-2-1",
+        "harborDataset": (
+            "https://hub.harborframework.com/datasets/terminal-bench/terminal-bench-2-1/6"
+        ),
+        "harborTaskRepo": "https://github.com/harbor-framework/terminal-bench-2-1",
+    },
     "terminal-bench/terminal-bench-2": {
         "policyId": "terminal-bench-2-harbor-v1",
         "benchmark": "https://www.tbench.ai/",

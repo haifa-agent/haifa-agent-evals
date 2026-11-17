@@ -4,11 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+import yaml
 from harbor.agents.installed.base import NonZeroAgentExitCodeError
 from harbor.models.agent.context import AgentContext
 
+from haifa_agent_evals.config import Candidate
 from haifa_agent_evals.integrations.harbor import haifa_agent as haifa_agent_module
 from haifa_agent_evals.integrations.harbor.haifa_agent import HaifaCodingAgent
+from haifa_agent_evals.runner import _agent_config
 
 
 def _codex_auth(path: Path, *, include_other: bool = False) -> Path:
@@ -230,7 +233,7 @@ def test_run_preserves_exit_code_and_quotes_instruction(tmp_path: Path, exit_cod
     command = next(command for command, _, _ in environment.commands if "--message" in command)
     workspace_setup = (
         'WORKSPACE=$(pwd -P) && '
-        'if [ "$WORKSPACE" = /app ]; then '
+        'if [ "$WORKSPACE" = /app ] || [ "$WORKSPACE" = /workspace ]; then '
         'WORKSPACE_PROBE=$(mktemp -d "$WORKSPACE/.haifa-eval-workspace-XXXXXX") && '
         'rmdir "$WORKSPACE_PROBE"; fi && "$JAVA" '
     )
@@ -244,6 +247,33 @@ def test_run_preserves_exit_code_and_quotes_instruction(tmp_path: Path, exit_cod
     archive_command = environment.commands[-1][0]
     assert "install -m 0600 /tmp/haifa-runtime.db /logs/agent/haifa-runtime.db" in archive_command
     assert "cp -a /tmp/haifa-transcripts/. /logs/agent/haifa-transcripts/" in archive_command
+
+
+def test_private_runtime_storage_matches_opencode_profile(tmp_path: Path) -> None:
+    candidate = Candidate("haifa", "task:HaifaCodingAgent", "deepseek-v4.1-flash", "opencode-go")
+    kwargs = dict(_agent_config(candidate, 2700, 1800)["kwargs"])
+    # Authentication is exercised separately with a fake OAuth file.
+    kwargs.pop("opencode_go_auth")
+    jar = tmp_path / "agent.jar"
+    jar.write_bytes(b"fake jar")
+    agent = HaifaCodingAgent(logs_dir=tmp_path / "logs", jar_path=jar, **kwargs)
+    environment = _FakeEnvironment()
+
+    asyncio.run(agent.install(environment))  # type: ignore[arg-type]
+    asyncio.run(agent.run("fix it", environment, AgentContext()))  # type: ignore[arg-type]
+
+    assert environment.commands[0][0].endswith(
+        "install -d -m 0755 /opt/haifa && "
+        "install -d -m 0700 /opt/haifa/runtime /opt/haifa/runtime/haifa-transcripts"
+    )
+    persistence = yaml.safe_load(agent.config_path.read_text(encoding="utf-8"))["persistence"]
+    archive, user, _ = environment.commands[-1]
+    assert user == "root"
+    assert (
+        f'install -m 0600 {persistence["databasePath"]} /logs/agent/haifa-runtime.db'
+        in archive
+    )
+    assert f'cp -a {persistence["transcriptRoot"]}/. /logs/agent/haifa-transcripts/' in archive
 
 
 def test_run_fails_when_sqlite_and_jsonl_cannot_be_archived(tmp_path: Path) -> None:

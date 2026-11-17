@@ -1,0 +1,36 @@
+# Twenty CPU-only tasks from the frozen Terminal-Bench 2.1 registry version.
+# Keep the two smoke cases that exercise /workspace and same-container verifier setup.
+id: coding-terminal-bench21-opencode-go-tokyo-20-v1
+dataset: terminal-bench/terminal-bench-2-1@sha256:7d7bdc1cbedad549fc1140404bd4dc45e5fd0ea7c4186773687d177ad3a0699a
+datasetTrust: upstream-verified
+tasks:
+  - terminal-bench/prove-plus-comm
+  - terminal-bench/overfull-hbox
+  - terminal-bench/adaptive-rejection-sampler
+  - terminal-bench/build-cython-ext
+  - terminal-bench/cancel-async-tasks
+  - terminal-bench/constraints-scheduling
+  - terminal-bench/gcode-to-text
+  - terminal-bench/large-scale-text-editing
+  - terminal-bench/log-summary-date-ranges
+  - terminal-bench/merge-diff-arc-agi-task
+  - terminal-bench/nginx-request-logging
+  - terminal-bench/query-optimize
+  - terminal-bench/regex-log
+  - terminal-bench/sparql-university
+  - terminal-bench/count-dataset-tokens
+  - terminal-bench/pytorch-model-cli
+  - terminal-bench/sqlite-db-truncate
+  - terminal-bench/sqlite-with-gcov
+  - terminal-bench/largest-eigenval
+  - terminal-bench/modernize-scientific-stack
+attempts: 1
+concurrency: 4
+timeoutMinutes: 45
+setupTimeoutMinutes: 30
+verifierTimeoutMinutes: 30
+candidates:
+  - id: haifa
+    agent: haifa_agent_evals.integrations.harbor.haifa_agent:HaifaCodingAgent
+    model: deepseek-v4.1-flash
+    provider: opencode-go

@@ -24,6 +24,7 @@ _CONFIG_PATH = f"{_CONTAINER_ROOT}/haifa-eval.yaml"
 _LOOPBACK_RELAY_PATH = f"{_CONTAINER_ROOT}/loopback_tcp_relay.py"
 _DATABASE_PATH = "/tmp/haifa-runtime.db"
 _TRANSCRIPT_ROOT = "/tmp/haifa-transcripts"
+_PRIVATE_RUNTIME_ROOT = f"{_CONTAINER_ROOT}/runtime"
 _ARCHIVED_DATABASE_PATH = "/logs/agent/haifa-runtime.db"
 _ARCHIVED_TRANSCRIPT_ROOT = "/logs/agent/haifa-transcripts"
 _JAVA_ARCHIVE_PATH = "/tmp/haifa-java.tar.gz"
@@ -33,7 +34,7 @@ _OPENCODE_AUTH_HOME = "/opt/haifa/auth-home"
 # Materialize the task root in OverlayFS before Haifa records its physical identity.
 _PREPARE_WORKSPACE = (
     'WORKSPACE=$(pwd -P) && '
-    'if [ "$WORKSPACE" = /app ]; then '
+    'if [ "$WORKSPACE" = /app ] || [ "$WORKSPACE" = /workspace ]; then '
     'WORKSPACE_PROBE=$(mktemp -d "$WORKSPACE/.haifa-eval-workspace-XXXXXX") && '
     'rmdir "$WORKSPACE_PROBE"; fi'
 )
@@ -65,6 +66,7 @@ class HaifaAgentAdapter:
         loopback_relay_port: int | None = None,
         codex_auth: bool = False,
         opencode_go_auth: bool = False,
+        private_runtime_storage: bool = False,
         timeout_seconds: int = 1200,
         **kwargs: object,
     ) -> None:
@@ -108,6 +110,17 @@ class HaifaAgentAdapter:
         if timeout_seconds <= 0:
             raise ValueError("Haifa trial timeout must be positive")
         self.timeout_seconds = timeout_seconds
+        self.private_runtime_storage = private_runtime_storage
+        self.database_path = (
+            f"{_PRIVATE_RUNTIME_ROOT}/haifa-runtime.db"
+            if private_runtime_storage
+            else _DATABASE_PATH
+        )
+        self.transcript_root = (
+            f"{_PRIVATE_RUNTIME_ROOT}/haifa-transcripts"
+            if private_runtime_storage
+            else _TRANSCRIPT_ROOT
+        )
         if (loopback_relay_host is None) != (loopback_relay_port is None):
             raise ValueError("loopback relay host and port must be configured together")
         if loopback_relay_port is not None and not 1 <= loopback_relay_port <= 65535:
@@ -124,10 +137,12 @@ class HaifaAgentAdapter:
 
     @override
     async def install(self, environment: BaseEnvironment) -> None:
-        await self.exec_as_root(
-            environment,
-            f"install -d -m 0755 {_CONTAINER_ROOT} && install -d -m 0777 {_TRANSCRIPT_ROOT}",
-        )
+        directories = f"install -d -m 0755 {_CONTAINER_ROOT}"
+        if self.private_runtime_storage:
+            directories += f" && install -d -m 0700 {_PRIVATE_RUNTIME_ROOT} {self.transcript_root}"
+        else:
+            directories += f" && install -d -m 0777 {self.transcript_root}"
+        await self.exec_as_root(environment, directories)
         java_probe = await environment.exec(
             command=(
                 f"JAVA=$([ -x {_CONTAINER_ROOT}/java/bin/java ] && "
@@ -251,13 +266,14 @@ class HaifaAgentAdapter:
         archive = await environment.exec(
             command=(
                 "set -eu; "
-                f"test -s {_DATABASE_PATH}; "
-                f"find {_TRANSCRIPT_ROOT} -type f -name '*.jsonl' -size +0c | grep -q .; "
-                f"install -m 0600 {_DATABASE_PATH} {_ARCHIVED_DATABASE_PATH}; "
+                f"test -s {self.database_path}; "
+                f"find {self.transcript_root} -type f -name '*.jsonl' -size +0c | grep -q .; "
+                f"install -m 0600 {self.database_path} {_ARCHIVED_DATABASE_PATH}; "
                 f"rm -rf {_ARCHIVED_TRANSCRIPT_ROOT}; "
                 f"install -d -m 0700 {_ARCHIVED_TRANSCRIPT_ROOT}; "
-                f"cp -a {_TRANSCRIPT_ROOT}/. {_ARCHIVED_TRANSCRIPT_ROOT}/"
-            )
+                f"cp -a {self.transcript_root}/. {_ARCHIVED_TRANSCRIPT_ROOT}/"
+            ),
+            **({"user": "root"} if self.private_runtime_storage else {}),
         )
         context.metadata = {
             "exit_code": result.return_code,
