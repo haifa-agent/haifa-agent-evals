@@ -100,7 +100,7 @@ Smoke 结果不得解释为 SWE-bench 分数估计。
 [Terminal-Bench 2.1 东京批次](evals/coding-terminal-bench21-opencode-go-tokyo-20-v1.yaml)
 固定 20 道 CPU 题、4 个并发 trial 和 OpenCode Go 的 DeepSeek V4.1 Flash。Go 评测把 SQLite
 和 transcript 放在容器的 `/opt/haifa/runtime`，保留 `/tmp` 供判分进程使用。Haifa 登记前会在
-`/app` 或 `/workspace` 创建并移除临时目录，将任务根目录提前写入 OverlayFS 的可写层。
+`/app`、`/workspace` 或其子目录中创建并移除临时目录，将任务根目录提前写入 OverlayFS 的可写层。
 
 `results.csv` 的 `status` 始终是 Harbor 官方 PASS/FAIL/ERROR；`trial_validity`、
 `agent_clean_exit`、`failure_stage` 等字段是正交诊断维度，只解释运行是否有效及失败发生在哪一层，

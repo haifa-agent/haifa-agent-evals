@@ -233,9 +233,9 @@ def test_run_preserves_exit_code_and_quotes_instruction(tmp_path: Path, exit_cod
     command = next(command for command, _, _ in environment.commands if "--message" in command)
     workspace_setup = (
         'WORKSPACE=$(pwd -P) && '
-        'if [ "$WORKSPACE" = /app ] || [ "$WORKSPACE" = /workspace ]; then '
+        'case "$WORKSPACE" in /app|/app/*|/workspace|/workspace/*) '
         'WORKSPACE_PROBE=$(mktemp -d "$WORKSPACE/.haifa-eval-workspace-XXXXXX") && '
-        'rmdir "$WORKSPACE_PROBE"; fi && "$JAVA" '
+        'rmdir "$WORKSPACE_PROBE";; esac && "$JAVA" '
     )
     assert workspace_setup in command
     assert command.index(workspace_setup) < command.index('--workspace "$WORKSPACE"')

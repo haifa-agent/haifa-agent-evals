@@ -34,9 +34,9 @@ _OPENCODE_AUTH_HOME = "/opt/haifa/auth-home"
 # Materialize the task root in OverlayFS before Haifa records its physical identity.
 _PREPARE_WORKSPACE = (
     'WORKSPACE=$(pwd -P) && '
-    'if [ "$WORKSPACE" = /app ] || [ "$WORKSPACE" = /workspace ]; then '
+    'case "$WORKSPACE" in /app|/app/*|/workspace|/workspace/*) '
     'WORKSPACE_PROBE=$(mktemp -d "$WORKSPACE/.haifa-eval-workspace-XXXXXX") && '
-    'rmdir "$WORKSPACE_PROBE"; fi'
+    'rmdir "$WORKSPACE_PROBE";; esac'
 )
 _JAVA_ARCHIVE_URL = (
     "https://github.com/adoptium/temurin21-binaries/releases/download/"
