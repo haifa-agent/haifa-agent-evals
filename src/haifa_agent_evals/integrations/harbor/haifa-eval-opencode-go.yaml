@@ -22,7 +22,6 @@ execution:
   provider: host-guarded
   network: allow
   shell: auto
-  defaultTimeoutMillis: 120000
   maxTimeoutMillis: 600000
   maxOutputLines: 2000
   maxOutputBytes: 51200
