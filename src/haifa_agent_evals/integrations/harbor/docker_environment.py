@@ -13,6 +13,10 @@ from harbor.models.trial.config import ServiceVolumeConfig
 from harbor.models.trial.paths import EnvironmentPaths, TrialPaths
 
 VERIFIER_UV_ARCHIVE_SHA256 = "2cf10babba653310606f8b49876cfb679928669e7ddaa1fb41fb00ce73e64f66"
+_VERIFIER_PACKAGE_PROBES = {
+    "ca-certificates": "test -s /etc/ssl/certs/ca-certificates.crt",
+    "sshpass": "command -v sshpass >/dev/null 2>&1",
+}
 _VERIFIER_UV_ARCHIVE = "/tmp/haifa-verifier-uv.tar.gz"
 _VERIFIER_UV_INSTALL = f"""set -eu
 test "$(uname -m)" = x86_64
@@ -37,8 +41,16 @@ class EvaluationDockerEnvironment(DockerEnvironment):
         trial_paths: TrialPaths,
         task_env_config: EnvironmentConfig,
         mounts: list[ServiceVolumeConfig] | None = None,
+        verifier_system_packages: list[str] | None = None,
+        retain_running_containers: bool = False,
         **kwargs,
     ) -> None:
+        self._retain_running_containers = retain_running_containers
+        self._verifier_system_packages = tuple(verifier_system_packages or ())
+        if any(name not in _VERIFIER_PACKAGE_PROBES for name in self._verifier_system_packages):
+            raise ValueError("unsupported verifier system package")
+        if self._verifier_system_packages and task_env_config.os != TaskOS.LINUX:
+            raise ValueError("verifier system packages require a Linux environment")
         configured_uv = os.environ.get("HAIFA_EVAL_VERIFIER_UV_ARCHIVE_PATH")
         self._verifier_uv_archive = (
             Path(configured_uv).expanduser().resolve() if configured_uv else None
@@ -87,6 +99,25 @@ class EvaluationDockerEnvironment(DockerEnvironment):
                 shutil.rmtree(host_logs)
             host_logs.mkdir(mode=0o700)
         await super().start(force_build=force_build)
+        if self._verifier_system_packages:
+            checks = [
+                f'if ! {_VERIFIER_PACKAGE_PROBES[name]}; then PACKAGES="$PACKAGES {name}"; fi'
+                for name in self._verifier_system_packages
+            ]
+            command = "\n".join([
+                "set -eu",
+                "PACKAGES=''",
+                *checks,
+                'if [ -n "$PACKAGES" ]; then',
+                "apt-get update",
+                "DEBIAN_FRONTEND=noninteractive apt-get install -y "
+                "--no-install-recommends $PACKAGES",
+                "fi",
+                *(_VERIFIER_PACKAGE_PROBES[name] for name in self._verifier_system_packages),
+            ])
+            result = await self.exec(command, user="root", timeout_sec=600)
+            if result.return_code:
+                raise RuntimeError("failed to prepare the verifier system packages")
         if self._verifier_uv_archive is not None:
             await self.upload_file(self._verifier_uv_archive, _VERIFIER_UV_ARCHIVE)
             result = await self.exec(_VERIFIER_UV_INSTALL, user="root")
@@ -97,3 +128,9 @@ class EvaluationDockerEnvironment(DockerEnvironment):
             result = await self.reset_dirs(remove_dirs=[verifier_dir], create_dirs=[verifier_dir])
             if result.return_code:
                 raise RuntimeError("failed to initialize the container-local verifier logs")
+
+    async def stop(self, delete: bool) -> None:
+        if self._retain_running_containers:
+            await self.prepare_logs_for_host()
+            return
+        await super().stop(delete=delete)

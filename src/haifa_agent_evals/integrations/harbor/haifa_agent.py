@@ -277,10 +277,14 @@ class HaifaAgentAdapter:
         )
         context.metadata = {
             "exit_code": result.return_code,
+            "archive_exit_code": archive.return_code,
             "trajectory_archived": archive.return_code == 0,
         }
         if archive.return_code != 0:
-            raise RuntimeError("Haifa SQLite/JSONL trajectory could not be archived")
+            raise RuntimeError(
+                "Haifa SQLite/JSONL trajectory could not be archived "
+                f"(CLI exit code {result.return_code}, archive exit code {archive.return_code})"
+            )
         if result.return_code != 0:
             raise self.nonzero_exit_error(
                 f"Haifa CLI exited with code {result.return_code}; verifier remains authoritative"

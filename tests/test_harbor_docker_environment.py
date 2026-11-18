@@ -123,3 +123,72 @@ def test_verifier_uv_is_installed_before_start_returns(tmp_path, monkeypatch, in
     else:
         asyncio.run(environment.start(force_build=False))
     assert operations == ["start", "upload", "install"]
+
+
+@pytest.mark.parametrize("retain_running", [False, True])
+def test_requested_running_state_survives_cleanup(tmp_path, monkeypatch, retain_running):
+    monkeypatch.delenv("HAIFA_EVAL_VERIFIER_UV_ARCHIVE_PATH", raising=False)
+    calls = []
+
+    async def stop(self, delete):
+        calls.append(("stop", delete))
+
+    async def prepare_logs(self):
+        calls.append(("logs", None))
+
+    monkeypatch.setattr(DockerEnvironment, "stop", stop)
+    monkeypatch.setattr(DockerEnvironment, "prepare_logs_for_host", prepare_logs)
+    environment = EvaluationDockerEnvironment(
+        environment_dir=tmp_path,
+        environment_name="fixture",
+        trial_paths=TrialPaths(trial_dir=tmp_path / "trial"),
+        task_env_config=EnvironmentConfig(docker_image="debian"),
+        session_id="fixture__env",
+        retain_running_containers=retain_running,
+    )
+    asyncio.run(environment.stop(delete=True))
+    assert calls == ([("logs", None)] if retain_running else [("stop", True)])
+
+
+@pytest.mark.parametrize("setup_exit_code", [0, 1])
+def test_verifier_packages_are_checked_before_agent_setup(tmp_path, monkeypatch, setup_exit_code):
+    monkeypatch.delenv("HAIFA_EVAL_VERIFIER_UV_ARCHIVE_PATH", raising=False)
+    commands = []
+
+    async def start(self, force_build):
+        return None
+
+    async def execute(self, command, *, user, timeout_sec):
+        commands.append(command)
+        assert user == "root"
+        return ExecResult(return_code=setup_exit_code)
+
+    monkeypatch.setattr(DockerEnvironment, "start", start)
+    monkeypatch.setattr(DockerEnvironment, "exec", execute)
+    environment = EvaluationDockerEnvironment(
+        environment_dir=tmp_path,
+        environment_name="fixture",
+        trial_paths=TrialPaths(trial_dir=tmp_path / "trial"),
+        task_env_config=EnvironmentConfig(docker_image="debian"),
+        session_id="fixture__env",
+        verifier_system_packages=["ca-certificates", "sshpass"],
+    )
+    if setup_exit_code:
+        with pytest.raises(RuntimeError, match="failed to prepare the verifier system packages"):
+            asyncio.run(environment.start(force_build=False))
+    else:
+        asyncio.run(environment.start(force_build=False))
+    assert len(commands) == 1
+
+
+def test_verifier_packages_reject_shell_input(tmp_path, monkeypatch):
+    monkeypatch.delenv("HAIFA_EVAL_VERIFIER_UV_ARCHIVE_PATH", raising=False)
+    with pytest.raises(ValueError, match="unsupported verifier system package"):
+        EvaluationDockerEnvironment(
+            environment_dir=tmp_path,
+            environment_name="fixture",
+            trial_paths=TrialPaths(trial_dir=tmp_path / "trial"),
+            task_env_config=EnvironmentConfig(docker_image="debian"),
+            session_id="fixture__env",
+            verifier_system_packages=["sshpass; false"],
+        )

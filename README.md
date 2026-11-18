@@ -314,6 +314,13 @@ Adapter 在启动容器前校验本地包，启动后以 root 安装到 `/usr/lo
 原题安装脚本因 CA 证书缺失或 APT 包下载失败而无法取得 `uvx` 的情况；`sshpass`、`expect` 等系统依赖
 仍需在对应任务镜像的无模型预检中确认。
 
+四题复跑配置为 `evals/coding-terminal-bench21-opencode-go-tokyo-retry4-v1.yaml`。
+Harbor Job 的 `environment.kwargs.verifier_system_packages` 可显式设置
+`[ca-certificates, sshpass]`，环境启动时检查并安装缺失项，安装失败会中止启动。
+`environment.kwargs.retain_running_containers: true` 会在判分后保留运行中的容器，
+使 QEMU 题的原运行状态可以继续用于补判。保留的容器需要在证据核对完成后显式清理。
+Haifa 归档失败会同时记录 CLI 与归档命令退出码。
+
 无模型补判需要保留原作答文件及题目要求的运行状态。共享容器任务的 `artifacts/manifest.json` 可能只记录
 空的 `/logs/artifacts`，而 `/app` 文件和 QEMU 等进程仍只存在于原容器。原容器已删除且缺少这些状态时，
 补判应记录产物不足的原因，基础镜像的无模型环境检查只能证明判分依赖可用。

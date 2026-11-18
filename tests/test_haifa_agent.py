@@ -241,7 +241,11 @@ def test_run_preserves_exit_code_and_quotes_instruction(tmp_path: Path, exit_cod
     assert command.index(workspace_setup) < command.index('--workspace "$WORKSPACE"')
     assert "'fix '" in command
     assert "echo unsafe'" in command
-    assert context.metadata == {"exit_code": exit_code, "trajectory_archived": True}
+    assert context.metadata == {
+        "exit_code": exit_code,
+        "archive_exit_code": 0,
+        "trajectory_archived": True,
+    }
     assert "DEEPSEEK_API_KEY" not in command
 
     archive_command = environment.commands[-1][0]
@@ -276,12 +280,24 @@ def test_private_runtime_storage_matches_opencode_profile(tmp_path: Path) -> Non
     assert f'cp -a {persistence["transcriptRoot"]}/. /logs/agent/haifa-transcripts/' in archive
 
 
-def test_run_fails_when_sqlite_and_jsonl_cannot_be_archived(tmp_path: Path) -> None:
+@pytest.mark.parametrize("exit_code", [0, 1, 2])
+@pytest.mark.parametrize("archive_exit_code", [1, 2])
+def test_run_fails_when_sqlite_and_jsonl_cannot_be_archived(
+    tmp_path: Path, exit_code: int, archive_exit_code: int
+) -> None:
     agent = _agent(tmp_path)
-    environment = _FakeEnvironment(archive_exit_code=1)
+    environment = _FakeEnvironment(run_exit_code=exit_code, archive_exit_code=archive_exit_code)
     context = AgentContext()
 
-    with pytest.raises(RuntimeError, match="trajectory could not be archived"):
+    with pytest.raises(RuntimeError) as failure:
         asyncio.run(agent.run("fix it", environment, context))  # type: ignore[arg-type]
 
-    assert context.metadata == {"exit_code": 0, "trajectory_archived": False}
+    assert str(failure.value) == (
+        "Haifa SQLite/JSONL trajectory could not be archived "
+        f"(CLI exit code {exit_code}, archive exit code {archive_exit_code})"
+    )
+    assert context.metadata == {
+        "exit_code": exit_code,
+        "archive_exit_code": archive_exit_code,
+        "trajectory_archived": False,
+    }
