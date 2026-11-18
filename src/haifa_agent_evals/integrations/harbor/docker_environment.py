@@ -38,20 +38,33 @@ class EvaluationDockerEnvironment(DockerEnvironment):
     def __init__(
         self,
         *,
+        environment_name: str,
         trial_paths: TrialPaths,
         task_env_config: EnvironmentConfig,
         mounts: list[ServiceVolumeConfig] | None = None,
         verifier_system_packages: list[str] | None = None,
         retain_running_containers: bool = False,
+        verifier_uv_tasks: list[str] | None = None,
+        verifier_packages_by_task: dict[str, list[str]] | None = None,
+        retain_running_tasks: list[str] | None = None,
         **kwargs,
     ) -> None:
-        self._retain_running_containers = retain_running_containers
-        self._verifier_system_packages = tuple(verifier_system_packages or ())
+        self._retain_running_containers = (
+            retain_running_containers or environment_name in (retain_running_tasks or ())
+        )
+        task_packages = (verifier_packages_by_task or {}).get(environment_name)
+        packages = verifier_system_packages if task_packages is None else task_packages
+        self._verifier_system_packages = tuple(packages or ())
         if any(name not in _VERIFIER_PACKAGE_PROBES for name in self._verifier_system_packages):
             raise ValueError("unsupported verifier system package")
         if self._verifier_system_packages and task_env_config.os != TaskOS.LINUX:
             raise ValueError("verifier system packages require a Linux environment")
         configured_uv = os.environ.get("HAIFA_EVAL_VERIFIER_UV_ARCHIVE_PATH")
+        if verifier_uv_tasks is not None:
+            if environment_name not in verifier_uv_tasks:
+                configured_uv = None
+            elif not configured_uv:
+                raise ValueError("the verifier uv archive is required for this task")
         self._verifier_uv_archive = (
             Path(configured_uv).expanduser().resolve() if configured_uv else None
         )
@@ -77,6 +90,7 @@ class EvaluationDockerEnvironment(DockerEnvironment):
             and mounts[0].get("target") == str(verifier_dir)
         )
         super().__init__(
+            environment_name=environment_name,
             trial_paths=trial_paths,
             task_env_config=task_env_config,
             mounts=[] if self._local_verifier_logs else mounts,

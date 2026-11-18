@@ -321,6 +321,10 @@ Harbor Job 的 `environment.kwargs.verifier_system_packages` 可显式设置
 使 QEMU 题的原运行状态可以继续用于补判。保留的容器需要在证据核对完成后显式清理。
 Haifa 归档失败会同时记录 CLI 与归档命令退出码。
 
+大批量 Job 可按 Harbor 的题目短名设置 `environment.kwargs.verifier_uv_tasks`、
+`verifier_packages_by_task` 和 `retain_running_tasks`。这样只有指定题目预装 uv、
+补装系统包或保留容器。显式加入 uv 清单的题目需要设置固定安装包路径。
+
 无模型补判需要保留原作答文件及题目要求的运行状态。共享容器任务的 `artifacts/manifest.json` 可能只记录
 空的 `/logs/artifacts`，而 `/app` 文件和 QEMU 等进程仍只存在于原容器。原容器已删除且缺少这些状态时，
 补判应记录产物不足的原因，基础镜像的无模型环境检查只能证明判分依赖可用。

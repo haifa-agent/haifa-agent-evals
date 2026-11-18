@@ -192,3 +192,23 @@ def test_verifier_packages_reject_shell_input(tmp_path, monkeypatch):
             session_id="fixture__env",
             verifier_system_packages=["sshpass; false"],
         )
+
+
+def test_task_scoped_verifier_setup_leaves_other_images_independent(tmp_path, monkeypatch):
+    archive = tmp_path / "missing.tar.gz"
+    monkeypatch.setenv("HAIFA_EVAL_VERIFIER_UV_ARCHIVE_PATH", str(archive))
+    options = {
+        "environment_dir": tmp_path,
+        "trial_paths": TrialPaths(trial_dir=tmp_path / "trial"),
+        "task_env_config": EnvironmentConfig(docker_image="alpine"),
+        "session_id": "fixture__env",
+        "verifier_uv_tasks": ["needs-uv"],
+        "verifier_packages_by_task": {"needs-uv": ["ca-certificates"]},
+        "retain_running_tasks": ["needs-uv"],
+    }
+    environment = EvaluationDockerEnvironment(environment_name="other", **options)
+    assert environment._verifier_uv_archive is None
+    assert not environment._verifier_system_packages
+    assert not environment._retain_running_containers
+    with pytest.raises(ValueError, match="verifier uv archive is missing"):
+        EvaluationDockerEnvironment(environment_name="needs-uv", **options)
