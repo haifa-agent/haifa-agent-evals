@@ -305,6 +305,19 @@ uv run evals run --config <eval.yaml> --tasks-path <tasks> --admission <admissio
 单步任务的独立 Linux verifier 在容器内以 root 创建 `/logs/verifier`，并由 Harbor 在判分后复制日志和 reward。
 这样判分脚本可以执行原有的目录属主检查，宿主运行账户也能读取归档。共享 verifier 和多步任务继续使用 Harbor 的挂载方式。
 
+Terminal-Bench 的 Linux x86_64/glibc 容器可通过 `HAIFA_EVAL_VERIFIER_UV_ARCHIVE_PATH` 预装固定的
+`uv` 与 `uvx` 0.9.5。变量指向官方发布包 `uv-x86_64-unknown-linux-gnu.tar.gz`，下载地址为
+`https://github.com/astral-sh/uv/releases/download/0.9.5/uv-x86_64-unknown-linux-gnu.tar.gz`，
+SHA-256 固定为 `2cf10babba653310606f8b49876cfb679928669e7ddaa1fb41fb00ce73e64f66`。
+Adapter 在启动容器前校验本地包，启动后以 root 安装到 `/usr/local/bin`，提供 `$HOME/.local/bin/env`，
+并验证两个命令的版本。包缺失、摘要不符、平台不兼容或安装失败会中止环境启动。该选项可用于
+原题安装脚本因 CA 证书缺失或 APT 包下载失败而无法取得 `uvx` 的情况；`sshpass`、`expect` 等系统依赖
+仍需在对应任务镜像的无模型预检中确认。
+
+无模型补判需要保留原作答文件及题目要求的运行状态。共享容器任务的 `artifacts/manifest.json` 可能只记录
+空的 `/logs/artifacts`，而 `/app` 文件和 QEMU 等进程仍只存在于原容器。原容器已删除且缺少这些状态时，
+补判应记录产物不足的原因，基础镜像的无模型环境检查只能证明判分依赖可用。
+
 当前 Harbor 0.20 在 Windows Podman compatibility wrapper 下启用 phase `network_mode=no-network` 时，
 平台探测会在环境启动前失败。因此 v4 已保证依赖客户端离线和依赖缓存完整，但尚未声称强制阻断容器
 全部直接 egress；升级或修复 Harbor/Podman 兼容后应再启用 verifier phase 的网络隔离。
