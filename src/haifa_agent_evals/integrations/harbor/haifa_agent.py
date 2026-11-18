@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import shlex
@@ -22,6 +23,7 @@ _CONTAINER_ROOT = "/opt/haifa"
 _JAR_PATH = f"{_CONTAINER_ROOT}/haifa-agent.jar"
 _CONFIG_PATH = f"{_CONTAINER_ROOT}/haifa-eval.yaml"
 _LOOPBACK_RELAY_PATH = f"{_CONTAINER_ROOT}/loopback_tcp_relay.py"
+_SQLITE_SNAPSHOT_PATH = f"{_CONTAINER_ROOT}/SqliteSnapshot.java"
 _DATABASE_PATH = "/tmp/haifa-runtime.db"
 _TRANSCRIPT_ROOT = "/tmp/haifa-transcripts"
 _PRIVATE_RUNTIME_ROOT = f"{_CONTAINER_ROOT}/runtime"
@@ -31,6 +33,10 @@ _JAVA_ARCHIVE_PATH = "/tmp/haifa-java.tar.gz"
 _CODEX_AUTH_UPLOAD_PATH = "/tmp/haifa-codex-auth.json"
 _CODEX_AUTH_PATH = "/root/.haifa-agent/auth.json"
 _OPENCODE_AUTH_HOME = "/opt/haifa/auth-home"
+_JAVA_COMMAND = (
+    f"JAVA=$([ -x {_CONTAINER_ROOT}/java/bin/java ] && "
+    f"echo {_CONTAINER_ROOT}/java/bin/java || command -v java)"
+)
 # Materialize the task root in OverlayFS before Haifa records its physical identity.
 _PREPARE_WORKSPACE = (
     'WORKSPACE=$(pwd -P) && '
@@ -97,6 +103,8 @@ class HaifaAgentAdapter:
         self.config_digest = _sha256(self.config_path)
         self.loopback_relay_path = Path(__file__).with_name("loopback_tcp_relay.py")
         self.loopback_relay_digest = _sha256(self.loopback_relay_path)
+        self.sqlite_snapshot_path = Path(__file__).with_name("SqliteSnapshot.java")
+        self.sqlite_snapshot_digest = _sha256(self.sqlite_snapshot_path)
         self.loopback_relay_host = loopback_relay_host
         self.loopback_relay_port = loopback_relay_port
         self.codex_auth_path = codex_auth_path() if codex_auth else None
@@ -178,6 +186,7 @@ class HaifaAgentAdapter:
         await environment.upload_file(self.jar_path, _JAR_PATH)
         await environment.upload_file(self.config_path, _CONFIG_PATH)
         await environment.upload_file(self.loopback_relay_path, _LOOPBACK_RELAY_PATH)
+        await environment.upload_file(self.sqlite_snapshot_path, _SQLITE_SNAPSHOT_PATH)
         if self.codex_auth_path is not None:
             payload = minimal_codex_auth(self.codex_auth_path)
             with tempfile.TemporaryDirectory(prefix="haifa-eval-codex-auth-") as directory:
@@ -212,12 +221,14 @@ class HaifaAgentAdapter:
         await self.exec_as_root(
             environment,
             command=(
-                f"chmod 0444 {_JAR_PATH} {_CONFIG_PATH} {_LOOPBACK_RELAY_PATH} && "
+                f"chmod 0444 {_JAR_PATH} {_CONFIG_PATH} {_LOOPBACK_RELAY_PATH} "
+                f"{_SQLITE_SNAPSHOT_PATH} && "
                 f"echo '{self.jar_digest}  {_JAR_PATH}' | sha256sum -c - && "
                 f"echo '{self.config_digest}  {_CONFIG_PATH}' | sha256sum -c - && "
                 f"echo '{self.loopback_relay_digest}  {_LOOPBACK_RELAY_PATH}' | sha256sum -c - && "
-                f"JAVA=$([ -x {_CONTAINER_ROOT}/java/bin/java ] && "
-                f"echo {_CONTAINER_ROOT}/java/bin/java || command -v java) && "
+                f"echo '{self.sqlite_snapshot_digest}  {_SQLITE_SNAPSHOT_PATH}' "
+                "| sha256sum -c - && "
+                f"{_JAVA_COMMAND} && "
                 '"$JAVA" -version 2>&1 | grep -q \'"21\' && '
                 "\"$JAVA\" --list-modules | grep -q '^jdk.random@' && "
                 f'"$JAVA" -jar {_JAR_PATH} --help >/dev/null'
@@ -254,24 +265,26 @@ class HaifaAgentAdapter:
             f"-Duser.home={_OPENCODE_AUTH_HOME} " if self.opencode_go_auth_path is not None else ""
         )
         command = relay_prefix + auth_options + (
-            f"JAVA=$([ -x {_CONTAINER_ROOT}/java/bin/java ] && "
-            f"echo {_CONTAINER_ROOT}/java/bin/java || command -v java); "
+            f"{_JAVA_COMMAND}; "
             f'{_PREPARE_WORKSPACE} && "$JAVA" '
             f'{java_options}-jar {_JAR_PATH} --workspace "$WORKSPACE" --config {_CONFIG_PATH} '
             f"--approval auto --timeout PT{self.timeout_seconds}S --trace jsonl "
             "--trace-file /logs/agent/haifa-trace.jsonl "
             f"--message {shlex.quote(instruction)}"
         )
-        result = await self._execute_cli(environment, command)
+        try:
+            result = await self._execute_cli(environment, command)
+        except (asyncio.CancelledError, TimeoutError):
+            # Harbor cancels the adapter before it downloads logs or starts the verifier.
+            await self._archive_interrupted_run(environment, context)
+            raise
         archive = await environment.exec(
             command=(
                 "set -eu; "
                 f"test -s {self.database_path}; "
                 f"find {self.transcript_root} -type f -name '*.jsonl' -size +0c | grep -q .; "
                 f"install -m 0600 {self.database_path} {_ARCHIVED_DATABASE_PATH}; "
-                f"rm -rf {_ARCHIVED_TRANSCRIPT_ROOT}; "
-                f"install -d -m 0700 {_ARCHIVED_TRANSCRIPT_ROOT}; "
-                f"cp -a {self.transcript_root}/. {_ARCHIVED_TRANSCRIPT_ROOT}/"
+                f"{self._copy_transcripts_command()}"
             ),
             **({"user": "root"} if self.private_runtime_storage else {}),
         )
@@ -289,6 +302,56 @@ class HaifaAgentAdapter:
             raise self.nonzero_exit_error(
                 f"Haifa CLI exited with code {result.return_code}; verifier remains authoritative"
             )
+
+    def _copy_transcripts_command(self) -> str:
+        return (
+            f"rm -rf {_ARCHIVED_TRANSCRIPT_ROOT}; "
+            f"install -d -m 0700 {_ARCHIVED_TRANSCRIPT_ROOT}; "
+            f"cp -a {self.transcript_root}/. {_ARCHIVED_TRANSCRIPT_ROOT}/"
+        )
+
+    async def _archive_interrupted_run(
+        self, environment: BaseEnvironment, context: AgentContext
+    ) -> None:
+        metadata: dict[str, object] = {
+            "exit_code": None,
+            "archive_exit_code": None,
+            "database_archived": False,
+            "trajectory_archived": False,
+        }
+        context.metadata = metadata
+        user = {"user": "root"} if self.private_runtime_storage else {}
+        try:
+            async with asyncio.timeout(30):
+                snapshot = await environment.exec(
+                    command=(
+                        f"set -eu; test -s {self.database_path}; umask 077; "
+                        'SNAPSHOT=$(mktemp /logs/agent/.haifa-db-XXXXXX); '
+                        "trap 'rm -f \"$SNAPSHOT\"' EXIT; "
+                        f'{_JAVA_COMMAND}; "$JAVA" -cp {_JAR_PATH} {_SQLITE_SNAPSHOT_PATH} '
+                        f'{self.database_path} "$SNAPSHOT" >/dev/null 2>&1; '
+                        f'mv -fT -- "$SNAPSHOT" {_ARCHIVED_DATABASE_PATH}'
+                    ),
+                    **user,
+                )
+                metadata["archive_exit_code"] = snapshot.return_code
+                if snapshot.return_code != 0:
+                    return
+                metadata["database_archived"] = True
+                metadata["archive_exit_code"] = None
+                transcripts = await environment.exec(
+                    command=(
+                        "set -eu; "
+                        f"find {self.transcript_root} -type f -name '*.jsonl' -size +0c "
+                        f"| grep -q .; {self._copy_transcripts_command()}"
+                    ),
+                    **user,
+                )
+                metadata["archive_exit_code"] = transcripts.return_code
+                metadata["trajectory_archived"] = transcripts.return_code == 0
+        except Exception as exc:
+            # Preserve the execution timeout even if the container is already unavailable.
+            metadata["archive_error_type"] = type(exc).__name__
 
     async def _execute_cli(self, environment: BaseEnvironment, command: str):
         return await environment.exec(

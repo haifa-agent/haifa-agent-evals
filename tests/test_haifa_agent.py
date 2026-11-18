@@ -94,6 +94,7 @@ def test_install_uploads_and_verifies_immutable_inputs(tmp_path: Path) -> None:
         "/opt/haifa/haifa-agent.jar",
         "/opt/haifa/haifa-eval.yaml",
         "/opt/haifa/loopback_tcp_relay.py",
+        "/opt/haifa/SqliteSnapshot.java",
     ]
     all_commands = "\n".join(command for command, _, _ in environment.commands)
     assert agent.jar_digest in all_commands
@@ -164,6 +165,7 @@ def test_install_skips_pinned_java_archive_when_image_java_is_usable(
         "/opt/haifa/haifa-agent.jar",
         "/opt/haifa/haifa-eval.yaml",
         "/opt/haifa/loopback_tcp_relay.py",
+        "/opt/haifa/SqliteSnapshot.java",
     ]
 
 
@@ -300,4 +302,32 @@ def test_run_fails_when_sqlite_and_jsonl_cannot_be_archived(
         "exit_code": exit_code,
         "archive_exit_code": archive_exit_code,
         "trajectory_archived": False,
+    }
+
+
+@pytest.mark.parametrize(("snapshot_exit_code", "transcript_exit_code"), [(0, 0), (0, 1), (1, 0)])
+def test_canceled_run_archives_database_and_preserves_timeout(
+    tmp_path: Path, snapshot_exit_code: int, transcript_exit_code: int
+) -> None:
+    class CanceledEnvironment(_FakeEnvironment):
+        async def exec(self, command: str, **kwargs: object) -> _ExecResult:
+            if "--message" in command:
+                raise asyncio.CancelledError
+            if "SqliteSnapshot.java" in command:
+                return _ExecResult(return_code=snapshot_exit_code)
+            if "cp -a /tmp/haifa-transcripts/." in command:
+                return _ExecResult(return_code=transcript_exit_code)
+            return await super().exec(command, **kwargs)
+
+    async def run() -> AgentContext:
+        context = AgentContext()
+        with pytest.raises(asyncio.CancelledError):
+            await _agent(tmp_path).run("run fixture", CanceledEnvironment(), context)
+        return context
+
+    assert asyncio.run(run()).metadata == {
+        "exit_code": None,
+        "archive_exit_code": snapshot_exit_code or transcript_exit_code,
+        "database_archived": snapshot_exit_code == 0,
+        "trajectory_archived": snapshot_exit_code == 0 and transcript_exit_code == 0,
     }

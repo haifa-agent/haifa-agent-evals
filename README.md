@@ -358,6 +358,10 @@ uv run evals run --config evals/coding-bailian-qwen37-smoke-v1.yaml --tasks-path
 - `haifa-transcripts/*.jsonl`：持久化 transcript 投影；
 - `haifa-trace.jsonl`：CLI 安全事件轨迹。
 
+Harbor 取消超时的 Agent 时，Adapter 会在判分前尝试归档 SQLite 的一致性快照和已写出的
+transcript。SQLite 快照包含已提交的 WAL 数据，且即使 transcript 尚未写出也会保留。
+Trial 照常记录 Agent 超时，判分仍由原 verifier 执行。
+
 这些文件可能包含题目、模型输出和工具参数，只能作为私有运行数据保存；公开报告前必须完成凭据、
 推理内容、Provider 原始响应和宿主路径扫描。
 
